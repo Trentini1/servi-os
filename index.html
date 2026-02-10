@@ -67,7 +67,7 @@
             Share: (props) => <Icon {...props} path={<><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></>} />,
             Skip: (props) => <Icon {...props} path={<><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></>} />,
             Clock: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
-            Hash: (props) => <Icon {...props} path={<><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>} />
+            Box: (props) => <Icon {...props} path={<><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></>} />
         };
 
         const SAAM_BRANCHES = [
@@ -89,17 +89,17 @@
             { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' }
         ];
 
+        const PART_SOURCES = ["Retiblocos", "Cliente"];
+
         // --- COMPONENTE DE ASSINATURA ROBUSTO ---
         const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
             const canvasRef = useRef(null);
             const [isDrawing, setIsDrawing] = useState(false);
 
             useEffect(() => {
-                // 1. Força scroll para o topo para evitar bugs de offset
                 window.scrollTo(0, 0);
-                document.body.style.overflow = 'hidden'; // Trava scroll do body
+                document.body.style.overflow = 'hidden'; 
 
-                // 2. Delay para garantir que o teclado fechou e o layout estabilizou
                 const timer = setTimeout(() => {
                     const canvas = canvasRef.current;
                     if (!canvas) return;
@@ -107,7 +107,6 @@
                     const ratio = Math.max(window.devicePixelRatio || 1, 1);
                     const rect = canvas.getBoundingClientRect();
                     
-                    // Configura tamanho real vs visual
                     canvas.width = rect.width * ratio;
                     canvas.height = rect.height * ratio;
                     
@@ -117,7 +116,7 @@
                     ctx.lineWidth = 3; 
                     ctx.lineJoin = 'round';
                     ctx.lineCap = 'round';
-                }, 300); // 300ms delay
+                }, 300);
 
                 return () => {
                     document.body.style.overflow = 'auto';
@@ -202,6 +201,7 @@
         function App() {
             const [view, setView] = useState('form');
             const [formData, setFormData] = useState({
+                controlNumber: '', // Novo
                 branch: SAAM_BRANCHES[0],
                 vesselName: '',
                 enginePosition: '',
@@ -218,16 +218,18 @@
                 notes: '',
                 runningHours: '',
                 photos: [],
+                parts: [], // Novo: { id, name, qty, source }
                 technicianSignature: null,
                 clientSignature: null
             });
 
-            // ATUALIZAR TÍTULO DA PÁGINA (Para nomear o PDF automaticamente)
+            // Estado temporário para nova peça
+            const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
+
             useEffect(() => {
                 if (formData.vesselName && formData.startDate) {
                     const cleanVessel = formData.vesselName.replace(/[^a-zA-Z0-9 ]/g, "").toUpperCase();
                     const position = formData.enginePosition || 'NA';
-                    // Formato: NOME - POSICAO - DATA
                     document.title = `${cleanVessel} - ${position} - ${formData.startDate}`;
                 } else {
                     document.title = "Relatório Técnico - Retiblocos";
@@ -236,7 +238,6 @@
 
             const shareData = async () => {
                 const dataStr = JSON.stringify(formData, null, 2);
-                // Atualizado para seguir o padrão do PDF
                 const fileName = `${formData.vesselName.toUpperCase()} - ${formData.enginePosition || 'NA'} - ${formData.startDate}.json`;
                 const file = new File([dataStr], fileName, { type: 'application/json' });
 
@@ -258,6 +259,20 @@
                     catch (error) { alert("Inválido."); }
                 };
                 reader.readAsText(fileObj);
+            };
+
+            // Peças Handlers
+            const addPart = () => {
+                if (!newPart.name) return;
+                setFormData(prev => ({
+                    ...prev,
+                    parts: [...prev.parts, { ...newPart, id: Date.now() }]
+                }));
+                setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); // Reset
+            };
+
+            const removePart = (id) => {
+                setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
             };
 
             const handlePhotoUpload = (e) => {
@@ -314,6 +329,15 @@
                         <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                             <div className="space-y-4">
                                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 mb-4">Informações Gerais</h3>
+                                
+                                {/* Numero de Controle - NOVO */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] text-slate-400 font-bold uppercase">Número de Controle (OS/Relatório)</label>
+                                    <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 font-mono text-orange-400 font-bold uppercase placeholder:text-slate-600"
+                                        placeholder="EX: 2024/001"
+                                        value={formData.controlNumber} onChange={e => setFormData({...formData, controlNumber: e.target.value})} />
+                                </div>
+
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-slate-400 font-bold uppercase">Cliente / Filial</label>
                                     <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 transition-colors"
@@ -405,6 +429,51 @@
                                 </div>
                             </div>
 
+                            {/* --- SEÇÃO DE PEÇAS (NOVO) --- */}
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2">
+                                    <Icons.Box size={16}/> Peças e Materiais
+                                </h3>
+                                
+                                {/* Formulario de Adição */}
+                                <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
+                                    <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-200 outline-none" 
+                                        placeholder="Nome da Peça / Material"
+                                        value={newPart.name} onChange={e => setNewPart({...newPart, name: e.target.value})} 
+                                    />
+                                    <div className="flex gap-2">
+                                        <input type="text" className="w-20 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-200 outline-none text-center" 
+                                            placeholder="Qtd"
+                                            value={newPart.qty} onChange={e => setNewPart({...newPart, qty: e.target.value})} 
+                                        />
+                                        <select className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-200 outline-none"
+                                            value={newPart.source} onChange={e => setNewPart({...newPart, source: e.target.value})}>
+                                            {PART_SOURCES.map(s => <option key={s} value={s}>Fornecido por: {s}</option>)}
+                                        </select>
+                                        <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-500 font-bold px-4">
+                                            <Icons.Plus />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Lista de Peças */}
+                                {formData.parts.length > 0 && (
+                                    <div className="space-y-2">
+                                        {formData.parts.map(part => (
+                                            <div key={part.id} className="flex items-center justify-between bg-slate-800/50 p-2 rounded border border-slate-700/50">
+                                                <div className="flex-1">
+                                                    <span className="font-bold text-sm text-slate-200">{part.qty}x {part.name}</span>
+                                                    <span className={`block text-[10px] font-bold uppercase ${part.source === 'Retiblocos' ? 'text-orange-400' : 'text-blue-400'}`}>
+                                                        Fornecedor: {part.source}
+                                                    </span>
+                                                </div>
+                                                <button onClick={() => removePart(part.id)} className="text-slate-500 hover:text-red-500 p-2"><Icons.Trash size={16}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="space-y-4">
                                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Evidências</h3>
                                 <div className="grid grid-cols-2 gap-3">
@@ -482,13 +551,14 @@
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Cliente / Local</div>
-                                <div className="text-lg font-bold uppercase text-white leading-tight">{formData.branch.split(' - ')[0]}</div>
-                                <div className="text-xs text-slate-300 font-mono">{formData.branch.split(' - ')[1] || ''}</div>
+                                <div className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Nº Controle</div>
+                                <div className="text-xl font-bold uppercase text-orange-500 leading-tight mb-2 font-mono">{formData.controlNumber || '-----'}</div>
+                                <div className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Cliente</div>
+                                <div className="text-sm font-bold uppercase text-white leading-tight">{formData.branch.split(' - ')[0]}</div>
                             </div>
                         </div>
 
-                        <div className="p-10 pt-32"> {/* Padding top compensa o header absolute */}
+                        <div className="p-10 pt-40"> {/* Padding top aumentado */}
                             
                             {/* Status Bar */}
                             <div className="flex bg-slate-100 rounded-lg p-3 border-l-8 border-orange-600 mb-8 items-center justify-between shadow-sm">
@@ -555,6 +625,35 @@
                                     </div>
                                 )}
                             </div>
+
+                            {/* --- TABELA DE PEÇAS NO PDF --- */}
+                            {formData.parts.length > 0 && (
+                                <div className="mt-8">
+                                    <h3 className="font-bold text-slate-900 uppercase border-b-2 border-slate-200 pb-1 mb-4 text-xs">Relação de Peças e Materiais</h3>
+                                    <table className="w-full text-xs border border-slate-200 rounded overflow-hidden">
+                                        <thead className="bg-slate-800 text-white">
+                                            <tr>
+                                                <th className="p-2 text-left w-12 text-center">QTD</th>
+                                                <th className="p-2 text-left">DESCRIÇÃO</th>
+                                                <th className="p-2 text-right">FORNECIMENTO</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {formData.parts.map((part, i) => (
+                                                <tr key={part.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                                    <td className="p-2 border-b border-slate-100 text-center font-bold">{part.qty}</td>
+                                                    <td className="p-2 border-b border-slate-100 font-bold text-slate-700">{part.name}</td>
+                                                    <td className="p-2 border-b border-slate-100 text-right">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${part.source === 'Retiblocos' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                            {part.source}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
 
                             {/* Galeria de Fotos (Grid Moderno) */}
                             {formData.photos.length > 0 && (
