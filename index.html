@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retiblocos - Sistema de Relatórios</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Relatório Técnico - Retiblocos</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -13,27 +13,33 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Font Inter for Professional Look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
     <style>
+        body { font-family: 'Inter', sans-serif; }
+
         /* Ajustes de Impressão A4 */
         @media print {
             @page { margin: 0; size: A4; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; color: black; }
             .no-print { display: none !important; }
-            .print-only { display: block !important; height: 100%; width: 100%; }
+            .print-only { display: block !important; width: 100%; height: 100%; }
             .page-break { break-inside: avoid; }
-            /* Esconde scrollbars na impressão */
-            ::-webkit-scrollbar { display: none; }
+            /* Tabelas profissionais na impressão */
+            tr:nth-child(even) { background-color: #f3f4f6 !important; }
+            .header-bg { background-color: #1e293b !important; color: white !important; }
         }
         .print-only { display: none; }
         
-        .fade-in { animation: fadeIn 0.4s ease-out; }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* Previne comportamento de arrastar/refresh no mobile enquanto assina */
+        /* Previne scroll e seleção no mobile */
         canvas { touch-action: none; user-select: none; -webkit-user-select: none; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans antialiased selection:bg-orange-500 selection:text-white">
+<body class="bg-slate-900 text-slate-100 antialiased selection:bg-orange-500 selection:text-white pb-20">
 
     <div id="root"></div>
 
@@ -56,7 +62,9 @@
             Check: (props) => <Icon {...props} path={<><polyline points="20 6 9 17 4 12"/></>} />,
             Refresh: (props) => <Icon {...props} path={<><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>} />,
             Pen: (props) => <Icon {...props} path={<><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></>} />,
-            FileText: (props) => <Icon {...props} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>} />
+            FileText: (props) => <Icon {...props} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>} />,
+            Share: (props) => <Icon {...props} path={<><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></>} />,
+            Skip: (props) => <Icon {...props} path={<><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></>} />
         };
 
         // --- DADOS ESTÁTICOS ---
@@ -79,33 +87,31 @@
             { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' }
         ];
 
-        // --- COMPONENTE DE ASSINATURA (CORRIGIDO) ---
-        const SignaturePad = ({ onSave, onCancel }) => {
+        // --- COMPONENTE DE ASSINATURA (CORRIGIDO PARA OFFSET MOBILE) ---
+        const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
             const canvasRef = useRef(null);
             const [isDrawing, setIsDrawing] = useState(false);
 
-            // Redimensiona o canvas para bater com o tamanho real da tela
             useEffect(() => {
-                const resizeCanvas = () => {
-                    const canvas = canvasRef.current;
-                    if(canvas){
-                        const rect = canvas.getBoundingClientRect();
-                        canvas.width = rect.width;
-                        canvas.height = rect.height;
-                        
-                        // Configura contexto
-                        const ctx = canvas.getContext('2d');
-                        ctx.strokeStyle = '#000000';
-                        ctx.lineWidth = 2; 
-                        ctx.lineJoin = 'round';
-                        ctx.lineCap = 'round';
-                    }
-                };
-                resizeCanvas();
-                window.addEventListener('resize', resizeCanvas);
-                return () => window.removeEventListener('resize', resizeCanvas);
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+
+                // Ajuste de DPI para evitar borrão e offset
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                const rect = canvas.getBoundingClientRect();
+                
+                canvas.width = rect.width * ratio;
+                canvas.height = rect.height * ratio;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.scale(ratio, ratio);
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2.5; 
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
             }, []);
 
+            // Pega coordenada precisa relativa ao canvas
             const getPos = (e) => {
                 const canvas = canvasRef.current;
                 const rect = canvas.getBoundingClientRect();
@@ -118,7 +124,7 @@
             };
 
             const startDrawing = (e) => {
-                if (e.cancelable) e.preventDefault(); // Previne scroll
+                if (e.cancelable) e.preventDefault();
                 const { x, y } = getPos(e);
                 const ctx = canvasRef.current.getContext('2d');
                 ctx.beginPath();
@@ -127,7 +133,7 @@
             };
 
             const draw = (e) => {
-                if (e.cancelable) e.preventDefault(); 
+                if (e.cancelable) e.preventDefault();
                 if (!isDrawing) return;
                 const { x, y } = getPos(e);
                 const ctx = canvasRef.current.getContext('2d');
@@ -136,34 +142,44 @@
             };
 
             const stopDrawing = (e) => {
-                if(e.cancelable) e.preventDefault();
+                if (e.cancelable) e.preventDefault();
                 setIsDrawing(false);
             };
 
             const clear = () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpa com base no tamanho real
+                // Reconfigura o path após limpar
+                ctx.beginPath();
             };
 
             return (
-                <div className="fixed inset-0 z-50 bg-slate-900/95 flex flex-col items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[80vh]">
+                <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[70vh]">
                         <div className="bg-slate-100 p-4 border-b flex justify-between items-center shrink-0">
-                            <h3 className="text-slate-800 font-bold">Assine Abaixo</h3>
-                            <button onClick={clear} className="text-slate-500 hover:text-red-500"><Icons.Refresh /></button>
+                            <h3 className="text-slate-800 font-bold text-lg">{title}</h3>
+                            <button onClick={clear} className="text-slate-500 hover:text-red-500 p-2"><Icons.Refresh /></button>
                         </div>
-                        <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair">
+                        <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair touch-none">
                             <canvas 
                                 ref={canvasRef}
-                                className="absolute inset-0 w-full h-full block"
+                                className="w-full h-full block touch-none"
                                 onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
                                 onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
                             />
+                            <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none text-slate-200 text-5xl font-black opacity-10 uppercase select-none">
+                                Assine Aqui
+                            </div>
                         </div>
                         <div className="bg-slate-50 p-4 border-t flex gap-3 shrink-0">
                             <button onClick={onCancel} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-200 rounded-lg">Voltar</button>
-                            <button onClick={() => onSave(canvasRef.current.toDataURL())} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">Confirmar</button>
+                            {onSkip && (
+                                <button onClick={onSkip} className="flex-1 py-3 font-semibold text-orange-600 hover:bg-orange-50 rounded-lg flex items-center justify-center gap-1">
+                                    <Icons.Skip size={16}/> Pular
+                                </button>
+                            )}
+                            <button onClick={() => onSave(canvasRef.current.toDataURL())} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-500/30">Confirmar</button>
                         </div>
                     </div>
                 </div>
@@ -172,46 +188,52 @@
 
         // --- APP PRINCIPAL ---
         function App() {
-            const [view, setView] = useState('form');
+            const [view, setView] = useState('form'); // form, sig_tech, sig_client, preview
             const [formData, setFormData] = useState({
                 branch: SAAM_BRANCHES[0],
                 vesselName: '',
                 enginePosition: '',
                 engineModel: '',
-                engineSerial: '', // Novo
-                maintenanceType: MAINTENANCE_TYPES[0], // Novo
+                engineSerial: '',
+                maintenanceType: MAINTENANCE_TYPES[0],
                 technicianName: '',
                 startDate: new Date().toISOString().split('T')[0],
                 startTime: '08:00',
                 endDate: new Date().toISOString().split('T')[0],
                 endTime: '17:00',
-                tasksPlanned: '', // Dividido
-                tasksExecuted: '', // Dividido
-                notes: '', // Dividido
+                tasksPlanned: '',
+                tasksExecuted: '',
+                notes: '',
                 runningHours: '',
                 photos: [],
-                signature: null
+                technicianSignature: null,
+                clientSignature: null
             });
 
-            // Auto-print
-            useEffect(() => {
-                if (view === 'preview') {
-                    const timer = setTimeout(() => {
-                        try { window.print(); } catch (e) { console.log("Auto-print blocked"); }
-                    }, 800);
-                    return () => clearTimeout(timer);
-                }
-            }, [view]);
+            // Compartilhar JSON usando API Nativa
+            const shareData = async () => {
+                const dataStr = JSON.stringify(formData, null, 2);
+                const fileName = `RB_${formData.vesselName.replace(/\s+/g, '_')}_${formData.startDate}.json`;
+                const file = new File([dataStr], fileName, { type: 'application/json' });
 
-            // --- Lógica de Backup (Importar/Exportar) ---
-            const exportData = () => {
-                const dataStr = JSON.stringify(formData);
-                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                const exportFileDefaultName = `RB_Relatorio_${formData.vesselName || 'sem_nome'}_${formData.startDate}.json`;
-                const linkElement = document.createElement('a');
-                linkElement.setAttribute('href', dataUri);
-                linkElement.setAttribute('download', exportFileDefaultName);
-                linkElement.click();
+                if (navigator.share && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            title: 'Backup Relatório Retiblocos',
+                            text: 'Segue arquivo de dados do relatório.',
+                            files: [file]
+                        });
+                    } catch (err) {
+                        console.log('Erro ao compartilhar', err);
+                    }
+                } else {
+                    // Fallback para download clássico
+                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                    const link = document.createElement('a');
+                    link.href = dataUri;
+                    link.download = fileName;
+                    link.click();
+                }
             };
 
             const importData = (event) => {
@@ -222,15 +244,14 @@
                     try {
                         const importedData = JSON.parse(e.target.result);
                         setFormData(importedData);
-                        alert("Dados carregados com sucesso!");
+                        alert("Relatório carregado com sucesso!");
                     } catch (error) {
-                        alert("Erro ao ler arquivo. Certifique-se que é um backup válido.");
+                        alert("Arquivo inválido.");
                     }
                 };
                 reader.readAsText(fileObj);
             };
 
-            // --- Handlers de Form ---
             const handlePhotoUpload = (e) => {
                 if (e.target.files) {
                     const newPhotos = Array.from(e.target.files).map(file => ({
@@ -243,14 +264,28 @@
             };
             const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
             const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
-            const handleSignatureSave = (dataUrl) => { setFormData(prev => ({ ...prev, signature: dataUrl })); setView('preview'); };
-            const isFormValid = () => formData.vesselName && formData.enginePosition && formData.engineModel && formData.technicianName && formData.tasksExecuted;
+            
+            // Fluxo de Assinatura
+            const saveTechSig = (dataUrl) => {
+                setFormData(prev => ({ ...prev, technicianSignature: dataUrl }));
+                setView('sig_client');
+            };
+            const saveClientSig = (dataUrl) => {
+                setFormData(prev => ({ ...prev, clientSignature: dataUrl }));
+                setView('preview');
+            };
+            const skipClientSig = () => {
+                setFormData(prev => ({ ...prev, clientSignature: null }));
+                setView('preview');
+            };
+
+            const isFormValid = () => formData.vesselName && formData.engineModel && formData.technicianName && formData.tasksExecuted;
             
             const calculateDuration = () => {
                 const start = new Date(`${formData.startDate}T${formData.startTime}`);
                 const end = new Date(`${formData.endDate}T${formData.endTime}`);
                 const diffMs = end - start;
-                if (diffMs < 0) return "Data Inválida";
+                if (diffMs < 0) return "--";
                 const diffHrs = Math.floor(diffMs / 3600000);
                 const diffMins = Math.round(((diffMs % 3600000) / 60000));
                 return diffMins === 0 ? `${diffHrs}h` : `${diffHrs}h ${diffMins}min`;
@@ -259,30 +294,27 @@
             const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR');
 
             return (
-                <div className="min-h-screen pb-10">
+                <div className="min-h-screen">
                     
-                    {/* --- HEADER MOBILE (NO-PRINT) --- */}
+                    {/* --- HEADER APP --- */}
                     <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
-                        <div className="max-w-lg mx-auto p-3 flex justify-between items-center">
+                        <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                 <div className="bg-orange-600 w-8 h-8 rounded flex items-center justify-center font-black text-white text-xs">RB</div>
-                                <span className="font-bold text-sm tracking-tight text-white">Retiblocos App</span>
+                                <span className="font-bold text-sm tracking-tight text-white uppercase">Retiblocos App</span>
                             </div>
                             
                             <div className="flex gap-2">
                                 {view === 'form' && (
                                     <>
-                                        <label className="p-2 text-slate-400 hover:text-white cursor-pointer bg-slate-700 rounded-lg" title="Importar Backup">
+                                        <label className="p-2 text-slate-400 hover:text-white cursor-pointer bg-slate-700 rounded-lg transition-colors" title="Carregar Relatório">
                                             <input type="file" onChange={importData} accept=".json" className="hidden" />
                                             <Icons.Upload size={18} />
                                         </label>
-                                        <button onClick={exportData} className="p-2 text-blue-400 hover:text-blue-300 bg-slate-700 rounded-lg" title="Salvar Backup">
-                                            <Icons.Save size={18} />
-                                        </button>
                                     </>
                                 )}
                                 {view === 'preview' && (
-                                    <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 rounded text-xs font-bold text-slate-200">
+                                    <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200 transition-colors">
                                         Editar
                                     </button>
                                 )}
@@ -290,40 +322,55 @@
                         </div>
                     </div>
 
-                    {/* --- FORMULÁRIO (NO-PRINT) --- */}
+                    {/* --- FORMULÁRIO --- */}
                     {view === 'form' && (
-                        <div className="no-print max-w-lg mx-auto p-4 space-y-6 fade-in">
+                        <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                             
-                            {/* Bloco 1: Cliente & Equipamento */}
-                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 space-y-4">
-                                <h3 className="text-xs font-bold text-orange-500 uppercase flex items-center gap-2"><Icons.FileText size={14}/> Cliente & Equipamento</h3>
+                            {/* Bloco 1: Dados Principais */}
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 mb-4">Informações Gerais</h3>
                                 
-                                <select className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none focus:border-orange-500"
-                                    value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>
-                                    {SAAM_BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                                </select>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input type="text" placeholder="Embarcação" className="bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none uppercase"
-                                        value={formData.vesselName} onChange={e => setFormData({...formData, vesselName: e.target.value})} />
-                                    <input list="models" type="text" placeholder="Modelo Motor" className="bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none"
-                                        value={formData.engineModel} onChange={e => setFormData({...formData, engineModel: e.target.value})} />
-                                    <datalist id="models"><option value="Caterpillar C32"/><option value="Caterpillar 3512"/><option value="Deutz 620"/><option value="MTU 4000"/></datalist>
+                                <div className="space-y-2">
+                                    <label className="text-xs text-slate-400 font-bold uppercase">Cliente / Filial</label>
+                                    <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 transition-colors"
+                                        value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>
+                                        {SAAM_BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                                    </select>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input type="text" placeholder="Série (Serial Nº)" className="bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none uppercase"
-                                        value={formData.engineSerial} onChange={e => setFormData({...formData, engineSerial: e.target.value})} />
-                                    <input type="number" placeholder="Horímetro" className="bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none"
-                                        value={formData.runningHours} onChange={e => setFormData({...formData, runningHours: e.target.value})} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 font-bold uppercase">Embarcação</label>
+                                        <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 uppercase"
+                                            value={formData.vesselName} onChange={e => setFormData({...formData, vesselName: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 font-bold uppercase">Modelo Motor</label>
+                                        <input list="models" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500"
+                                            value={formData.engineModel} onChange={e => setFormData({...formData, engineModel: e.target.value})} />
+                                        <datalist id="models"><option value="Caterpillar C32"/><option value="Caterpillar 3512"/><option value="Deutz 620"/><option value="MTU 4000"/></datalist>
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label className="text-xs text-slate-400 font-bold mb-1 block">Posição</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 font-bold uppercase">Série (Serial Nº)</label>
+                                        <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 uppercase"
+                                            value={formData.engineSerial} onChange={e => setFormData({...formData, engineSerial: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 font-bold uppercase">Horímetro Atual</label>
+                                        <input type="number" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500"
+                                            value={formData.runningHours} onChange={e => setFormData({...formData, runningHours: e.target.value})} />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs text-slate-400 font-bold uppercase">Posição do Motor</label>
                                     <div className="grid grid-cols-4 gap-2">
                                         {ENGINE_POSITIONS.map(p => (
                                             <button key={p.id} onClick={() => setFormData({...formData, enginePosition: p.label})}
-                                                className={`py-2 rounded border text-xs font-bold transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white' : 'bg-slate-900 border-slate-600 text-slate-400'}`}>
+                                                className={`py-3 rounded-lg border text-xs font-bold transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white shadow-lg shadow-orange-900/50' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>
                                                 {p.short}
                                             </button>
                                         ))}
@@ -331,196 +378,257 @@
                                 </div>
                             </div>
 
-                            {/* Bloco 2: Serviço */}
-                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 space-y-4">
-                                <h3 className="text-xs font-bold text-orange-500 uppercase flex items-center gap-2"><Icons.Pen size={14}/> Detalhes do Serviço</h3>
+                            {/* Bloco 2: Execução */}
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 mb-4">Dados da Intervenção</h3>
                                 
-                                <div className="space-y-1">
-                                    <label className="text-xs text-slate-400">Tipo de Manutenção</label>
-                                    <select className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none"
+                                <div className="space-y-2">
+                                    <label className="text-xs text-slate-400 font-bold uppercase">Tipo de Manutenção</label>
+                                    <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500"
                                         value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>
                                         {MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3 bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                                    <div className="space-y-1">
+                                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
                                         <label className="text-[10px] text-slate-400 uppercase font-bold">Início</label>
-                                        <input type="date" className="w-full bg-slate-800 rounded p-1.5 text-xs text-slate-200" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
-                                        <input type="time" className="w-full bg-slate-800 rounded p-1.5 text-xs text-slate-200" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} />
+                                        <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-200 outline-none focus:border-orange-500" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
+                                        <input type="time" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-200 outline-none focus:border-orange-500" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} />
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] text-slate-400 uppercase font-bold">Fim</label>
-                                        <input type="date" className="w-full bg-slate-800 rounded p-1.5 text-xs text-slate-200" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} />
-                                        <input type="time" className="w-full bg-slate-800 rounded p-1.5 text-xs text-slate-200" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} />
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-slate-400 uppercase font-bold">Término</label>
+                                        <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-200 outline-none focus:border-orange-500" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} />
+                                        <input type="time" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-200 outline-none focus:border-orange-500" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} />
                                     </div>
                                 </div>
                                 
-                                <input type="text" placeholder="Nome do Técnico" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm outline-none"
+                                <div className="space-y-2">
+                                    <label className="text-xs text-slate-400 font-bold uppercase">Técnico Responsável</label>
+                                    <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500"
                                     value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} />
+                                </div>
                             </div>
 
-                            {/* Bloco 3: Relatórios (Dividido) */}
-                            <div className="space-y-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs text-orange-400 font-bold uppercase">1. Serviços a Executar (Planejado)</label>
-                                    <textarea rows={3} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm focus:border-orange-500 outline-none"
-                                        placeholder="O que estava previsto..." value={formData.tasksPlanned} onChange={e => setFormData({...formData, tasksPlanned: e.target.value})} />
+                            {/* Bloco 3: Textos */}
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs text-slate-300 font-bold uppercase">1. Planejamento (Escopo Inicial)</label>
+                                    </div>
+                                    <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm focus:border-orange-500 outline-none transition-all placeholder:text-slate-600"
+                                        placeholder="Descreva o que foi solicitado..." value={formData.tasksPlanned} onChange={e => setFormData({...formData, tasksPlanned: e.target.value})} />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs text-green-400 font-bold uppercase">2. Serviços Executados (Realizado)</label>
-                                    <textarea rows={6} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
-                                        placeholder="O que foi feito de fato..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
+                                <div className="space-y-2">
+                                    <label className="text-xs text-green-400 font-bold uppercase">2. Execução (Realizado) *</label>
+                                    <textarea rows={6} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none transition-all placeholder:text-slate-600"
+                                        placeholder="Descreva detalhadamente o serviço realizado..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs text-blue-400 font-bold uppercase">3. Observações Gerais</label>
-                                    <textarea rows={3} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm focus:border-blue-500 outline-none"
-                                        placeholder="Pendências, avisos..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+                                <div className="space-y-2">
+                                    <label className="text-xs text-blue-400 font-bold uppercase">3. Observações / Pendências</label>
+                                    <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm focus:border-blue-500 outline-none transition-all placeholder:text-slate-600"
+                                        placeholder="Informações adicionais..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
                                 </div>
                             </div>
 
                             {/* Bloco 4: Fotos */}
-                            <div className="grid grid-cols-2 gap-3">
-                                {formData.photos.map((photo) => (
-                                    <div key={photo.id} className="relative group bg-slate-800 rounded border border-slate-700 overflow-hidden">
-                                        <img src={photo.url} className="w-full h-24 object-cover" />
-                                        <button onClick={() => removePhoto(photo.id)} className="absolute top-1 right-1 bg-red-600 p-1 rounded-full text-white opacity-80 hover:opacity-100"><Icons.Trash size={12}/></button>
-                                        <input type="text" placeholder="Legenda..." className="w-full bg-slate-900 text-[10px] p-1.5 text-slate-300 outline-none border-t border-slate-700"
-                                            value={photo.caption} onChange={e => updateCaption(photo.id, e.target.value)} />
-                                    </div>
-                                ))}
-                                <label className="h-24 border-2 border-dashed border-slate-700 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/50 hover:border-orange-500/50 text-slate-500 hover:text-orange-500 transition-colors">
-                                    <Icons.Plus />
-                                    <span className="text-xs mt-1">Foto</span>
-                                    <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
-                                </label>
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Evidências</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {formData.photos.map((photo) => (
+                                        <div key={photo.id} className="relative group bg-slate-800 rounded-lg border border-slate-700 overflow-hidden shadow-sm">
+                                            <img src={photo.url} className="w-full h-32 object-cover" />
+                                            <button onClick={() => removePhoto(photo.id)} className="absolute top-1 right-1 bg-black/60 p-1.5 rounded-full text-white hover:bg-red-600 transition-colors"><Icons.Trash size={14}/></button>
+                                            <input type="text" placeholder="Legenda..." className="w-full bg-slate-900 text-[10px] p-2 text-slate-300 outline-none border-t border-slate-700"
+                                                value={photo.caption} onChange={e => updateCaption(photo.id, e.target.value)} />
+                                        </div>
+                                    ))}
+                                    <label className="h-32 border-2 border-dashed border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500 transition-all">
+                                        <Icons.Plus size={24} />
+                                        <span className="text-xs mt-2 font-bold">Adicionar Foto</span>
+                                        <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+                                    </label>
+                                </div>
                             </div>
 
                             {/* Botão Flutuante */}
-                            <div className="fixed bottom-4 left-4 right-4 z-40">
-                                <button disabled={!isFormValid()} onClick={() => setView('signing')}
-                                    className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 ${isFormValid() ? 'bg-orange-600 text-white hover:bg-orange-500' : 'bg-slate-800 text-slate-500'}`}>
-                                    <Icons.Pen size={18} /> Assinar e Gerar
+                            <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900/95 backdrop-blur border-t border-slate-700 z-40">
+                                <div className="max-w-2xl mx-auto">
+                                    <button disabled={!isFormValid()} onClick={() => setView('sig_tech')}
+                                        className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
+                                        <Icons.Pen size={20} /> Assinar e Finalizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Telas de Assinatura */}
+                    {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
+                    {view === 'sig_client' && <SignaturePad title="Assinatura do Cliente (Opcional)" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
+
+                    {/* Tela Final (Preview) */}
+                    {view === 'preview' && (
+                        <div className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
+                            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2">
+                                <Icons.Check size={40} className="text-white"/>
+                            </div>
+                            
+                            <div>
+                                <h2 className="text-2xl font-bold text-white mb-1">Relatório Pronto!</h2>
+                                <p className="text-slate-400 text-sm">Escolha uma ação abaixo.</p>
+                            </div>
+
+                            <div className="w-full space-y-3">
+                                <button onClick={() => window.print()} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95">
+                                    <Icons.Save size={20} className="text-slate-900"/>
+                                    1. Baixar/Imprimir PDF
+                                </button>
+                                
+                                <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3 transition-transform active:scale-95">
+                                    <Icons.Share size={20} />
+                                    2. Compartilhar Dados (JSON)
                                 </button>
                             </div>
+
+                            <p className="text-[10px] text-slate-500 max-w-xs leading-relaxed">
+                                Nota: O PDF é gerado pelo seu dispositivo. O JSON serve para editar este relatório futuramente.
+                            </p>
+
+                            <button onClick={() => setView('form')} className="text-slate-500 text-sm hover:text-white underline">Voltar e Editar</button>
                         </div>
                     )}
 
-                    {view === 'signing' && <SignaturePad onSave={handleSignatureSave} onCancel={() => setView('form')} />}
-
-                    {view === 'preview' && (
-                        <div className="no-print p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-                            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-green-500/20"><Icons.Check size={32} className="text-white"/></div>
-                            <h2 className="text-xl font-bold text-white mb-6">Relatório Gerado</h2>
-                            <button onClick={() => window.print()} className="w-full max-w-sm bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 rounded-xl mb-4 shadow-lg">BAIXAR PDF</button>
-                            <button onClick={exportData} className="w-full max-w-sm bg-slate-700 text-blue-300 font-bold py-3 rounded-xl mb-4 text-sm border border-slate-600">BAIXAR BACKUP (.JSON)</button>
-                            <button onClick={() => setView('form')} className="text-slate-500 text-sm underline">Voltar</button>
-                        </div>
-                    )}
-
-                    {/* --- PDF LAYOUT (PRINT ONLY) --- */}
-                    <div className="print-only bg-white text-slate-900 p-8 relative">
+                    {/* --- LAYOUT DE IMPRESSÃO PROFISSIONAL (A4) --- */}
+                    <div className="print-only bg-white text-slate-900 p-10 relative text-[11px] leading-tight">
                         
-                        {/* Header */}
-                        <div className="flex justify-between items-center border-b-2 border-orange-600 pb-4 mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-orange-600 text-white p-2 w-12 h-12 flex items-center justify-center font-black text-2xl rounded">RB</div>
+                        {/* Header Oficial */}
+                        <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-orange-600 text-white p-3 w-14 h-14 flex items-center justify-center font-black text-2xl rounded shadow-sm">RB</div>
                                 <div>
-                                    <h1 className="text-2xl font-black uppercase tracking-tight leading-none text-slate-900">Retiblocos</h1>
-                                    <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Engenharia e Manutenção</p>
+                                    <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">Retiblocos</h1>
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Retífica de Motores</p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-[9px] text-slate-400 uppercase font-bold">Cliente</div>
-                                <div className="text-lg font-bold leading-none">{formData.branch.split(' - ')[0]}</div>
-                                <div className="text-xs text-slate-500">{formData.branch.split(' - ')[1] || ''}</div>
+                                <div className="text-[9px] text-slate-400 uppercase font-bold mb-1">Cliente</div>
+                                <div className="text-sm font-bold uppercase">{formData.branch.split(' - ')[0]}</div>
+                                <div className="text-[10px] text-slate-600">{formData.branch.split(' - ')[1] || ''}</div>
                             </div>
                         </div>
 
-                        {/* Info Bar */}
-                        <div className="bg-slate-100 p-3 rounded-lg mb-6 flex justify-between items-center border-l-4 border-slate-800">
+                        {/* Tabela de Dados Principais */}
+                        <div className="border border-slate-300 rounded mb-6 overflow-hidden">
+                            <div className="bg-slate-800 text-white p-2 px-3 font-bold uppercase text-xs flex justify-between">
+                                <span>Dados da Ordem de Serviço</span>
+                                <span>{new Date().toLocaleDateString()}</span>
+                            </div>
+                            <table className="w-full">
+                                <tbody>
+                                    <tr className="border-b border-slate-200">
+                                        <td className="p-2 w-1/4 bg-slate-50 font-bold text-slate-500 uppercase text-[9px]">Embarcação</td>
+                                        <td className="p-2 w-1/4 font-bold uppercase border-r border-slate-200">{formData.vesselName}</td>
+                                        <td className="p-2 w-1/4 bg-slate-50 font-bold text-slate-500 uppercase text-[9px]">Tipo Manutenção</td>
+                                        <td className="p-2 w-1/4 font-bold uppercase">{formData.maintenanceType}</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-200">
+                                        <td className="p-2 bg-slate-50 font-bold text-slate-500 uppercase text-[9px]">Motor / Modelo</td>
+                                        <td className="p-2 font-bold uppercase border-r border-slate-200">{formData.engineModel}</td>
+                                        <td className="p-2 bg-slate-50 font-bold text-slate-500 uppercase text-[9px]">Horímetro</td>
+                                        <td className="p-2 font-bold">{formData.runningHours} h</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="p-2 bg-slate-50 font-bold text-slate-500 uppercase text-[9px]">Posição</td>
+                                        <td className="p-2 font-bold uppercase border-r border-slate-200">{formData.enginePosition}</td>
+                                        <td className="p-2 bg-slate-50 font-bold text-slate-500 uppercase text-[9px]">Série</td>
+                                        <td className="p-2 font-bold uppercase">{formData.engineSerial || 'N/A'}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Período */}
+                        <div className="mb-6 flex justify-between items-center bg-slate-50 border border-slate-200 p-2 rounded px-4">
                             <div>
-                                <div className="text-[10px] text-slate-500 uppercase font-bold">Tipo de Intervenção</div>
-                                <div className="font-bold text-lg leading-tight">{formData.maintenanceType}</div>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase block">Início do Serviço</span>
+                                <span className="font-bold">{formatDate(formData.startDate)} às {formData.startTime}</span>
                             </div>
+                            <div className="h-6 w-px bg-slate-300"></div>
+                            <div>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase block">Término do Serviço</span>
+                                <span className="font-bold">{formatDate(formData.endDate)} às {formData.endTime}</span>
+                            </div>
+                            <div className="h-6 w-px bg-slate-300"></div>
                             <div className="text-right">
-                                <div className="text-[10px] text-slate-500 uppercase font-bold">Período</div>
-                                <div className="text-sm font-bold">
-                                    {formatDate(formData.startDate)} <span className="font-normal text-slate-400 mx-1">às</span> {formData.endTime}
-                                </div>
-                                <div className="text-[10px] font-bold text-orange-600">Duração: {calculateDuration()}</div>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase block">Duração Total</span>
+                                <span className="font-bold text-orange-600">{calculateDuration()}</span>
                             </div>
                         </div>
 
-                        {/* Equipamento Grid */}
-                        <div className="grid grid-cols-4 gap-4 mb-6 border-b border-slate-200 pb-6">
-                            <div><span className="block text-[10px] uppercase font-bold text-slate-400">Embarcação</span><span className="font-bold">{formData.vesselName}</span></div>
-                            <div><span className="block text-[10px] uppercase font-bold text-slate-400">Motor / Modelo</span><span className="font-bold">{formData.engineModel}</span></div>
-                            <div><span className="block text-[10px] uppercase font-bold text-slate-400">Série</span><span className="font-bold">{formData.engineSerial || 'N/A'}</span></div>
-                            <div><span className="block text-[10px] uppercase font-bold text-slate-400">Horímetro</span><span className="font-bold">{formData.runningHours} h</span></div>
-                        </div>
-
-                        {/* Corpo do Relatório */}
+                        {/* Corpo do Texto */}
                         <div className="space-y-6">
                             {formData.tasksPlanned && (
                                 <div>
-                                    <h3 className="text-xs font-bold uppercase text-orange-600 border-b border-orange-100 pb-1 mb-2">1. Serviços a Executar (Escopo)</h3>
-                                    <p className="text-xs text-justify leading-relaxed whitespace-pre-wrap">{formData.tasksPlanned}</p>
+                                    <h3 className="font-bold text-slate-900 uppercase border-b-2 border-slate-200 pb-1 mb-2 text-xs">1. Planejamento (Escopo)</h3>
+                                    <p className="text-justify whitespace-pre-wrap text-slate-700">{formData.tasksPlanned}</p>
                                 </div>
                             )}
                             
                             <div>
-                                <h3 className="text-xs font-bold uppercase text-green-700 border-b border-green-100 pb-1 mb-2">2. Serviços Executados</h3>
-                                <div className="text-xs text-justify leading-relaxed whitespace-pre-wrap min-h-[100px]">{formData.tasksExecuted}</div>
+                                <h3 className="font-bold text-slate-900 uppercase border-b-2 border-slate-200 pb-1 mb-2 text-xs">2. Execução (Serviços Realizados)</h3>
+                                <div className="text-justify whitespace-pre-wrap text-slate-800 min-h-[80px]">{formData.tasksExecuted}</div>
                             </div>
 
                             {formData.notes && (
                                 <div>
-                                    <h3 className="text-xs font-bold uppercase text-blue-700 border-b border-blue-100 pb-1 mb-2">3. Observações Gerais</h3>
-                                    <p className="text-xs text-justify leading-relaxed whitespace-pre-wrap italic text-slate-600">{formData.notes}</p>
+                                    <h3 className="font-bold text-slate-900 uppercase border-b-2 border-slate-200 pb-1 mb-2 text-xs">3. Observações Gerais</h3>
+                                    <p className="text-justify whitespace-pre-wrap italic text-slate-600">{formData.notes}</p>
                                 </div>
                             )}
                         </div>
 
-                        {/* Fotos Grid */}
+                        {/* Fotos */}
                         {formData.photos.length > 0 && (
                             <div className="mt-8 page-break">
-                                <h3 className="text-xs font-bold uppercase text-slate-400 border-b border-slate-200 pb-1 mb-4">Evidências Fotográficas</h3>
+                                <h3 className="font-bold text-slate-900 uppercase border-b-2 border-slate-200 pb-1 mb-4 text-xs">Anexo Fotográfico</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     {formData.photos.map((photo) => (
-                                        <div key={photo.id} className="break-inside-avoid mb-2 bg-slate-50 p-2 rounded border border-slate-100">
-                                            <div className="h-40 flex items-center justify-center overflow-hidden mb-2 bg-white rounded border border-slate-100">
+                                        <div key={photo.id} className="break-inside-avoid border border-slate-200 bg-slate-50 p-2 rounded">
+                                            <div className="h-44 flex items-center justify-center overflow-hidden mb-2 bg-white border border-slate-100">
                                                 <img src={photo.url} className="max-h-full max-w-full object-contain" />
                                             </div>
-                                            {photo.caption && <p className="text-[10px] font-medium text-slate-600 text-center">{photo.caption}</p>}
+                                            {photo.caption && <p className="text-[9px] font-medium text-slate-600 text-center uppercase">{photo.caption}</p>}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Footer / Assinaturas */}
+                        {/* Assinaturas */}
                         <div className="mt-auto pt-10 break-inside-avoid">
-                            <div className="grid grid-cols-2 gap-12">
+                            <div className="grid grid-cols-2 gap-16">
                                 <div className="text-center">
-                                    {formData.signature ? (
-                                        <img src={formData.signature} className="h-12 mx-auto mb-1 object-contain" />
+                                    {formData.technicianSignature ? (
+                                        <img src={formData.technicianSignature} className="h-12 mx-auto mb-1 object-contain" />
                                     ) : <div className="h-12"></div>}
-                                    <div className="border-t border-slate-800 pt-1">
-                                        <p className="font-bold text-xs">{formData.technicianName}</p>
+                                    <div className="border-t border-slate-400 pt-1">
+                                        <p className="font-bold text-xs uppercase">{formData.technicianName}</p>
                                         <p className="text-[9px] uppercase font-bold text-orange-600">Técnico Retiblocos</p>
                                     </div>
                                 </div>
                                 <div className="text-center">
-                                    <div className="h-12"></div>
-                                    <div className="border-t border-slate-300 pt-1">
-                                        <p className="font-bold text-xs">Aprovação SAAM</p>
-                                        <p className="text-[9px] uppercase text-slate-500">Chefe de Máquinas / Cmte</p>
+                                    {formData.clientSignature ? (
+                                        <img src={formData.clientSignature} className="h-12 mx-auto mb-1 object-contain" />
+                                    ) : <div className="h-12"></div>}
+                                    <div className="border-t border-slate-400 pt-1">
+                                        <p className="font-bold text-xs uppercase">Aprovação Cliente</p>
+                                        <p className="text-[9px] uppercase text-slate-500">Chefe de Máquinas / Comandante</p>
                                     </div>
                                 </div>
                             </div>
-                            <div className="text-[8px] text-slate-300 uppercase text-center mt-8">
-                                Documento gerado digitalmente pelo sistema Retiblocos em {new Date().toLocaleString()}
+                            <div className="text-[8px] text-slate-400 uppercase text-center mt-8 border-t border-slate-100 pt-2">
+                                Retiblocos Retífica de Motores - Documento Gerado Digitalmente
                             </div>
                         </div>
 
