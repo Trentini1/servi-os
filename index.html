@@ -213,7 +213,6 @@
                 startTime: '08:00',
                 endDate: new Date().toISOString().split('T')[0],
                 endTime: '17:00',
-                tasksPlanned: '',
                 tasksExecuted: '',
                 notes: '',
                 runningHours: '',
@@ -413,17 +412,12 @@
 
                             <div className="space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs text-slate-300 font-bold uppercase">1. Planejamento (Escopo)</label>
-                                    <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 transition-all placeholder:text-slate-600"
-                                        placeholder="O que foi solicitado?" value={formData.tasksPlanned} onChange={e => setFormData({...formData, tasksPlanned: e.target.value})} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs text-green-400 font-bold uppercase">2. Execução (Realizado) *</label>
+                                    <label className="text-xs text-green-400 font-bold uppercase">1. Execução (Realizado) *</label>
                                     <textarea rows={6} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-green-500 transition-all placeholder:text-slate-600"
                                         placeholder="Descreva o serviço..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs text-blue-400 font-bold uppercase">3. Observações</label>
+                                    <label className="text-xs text-blue-400 font-bold uppercase">2. Observações</label>
                                     <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-600"
                                         placeholder="Pendências, avisos..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
                                 </div>
@@ -606,21 +600,14 @@
 
                             {/* Conteúdo do Relatório */}
                             <div className="space-y-6">
-                                {formData.tasksPlanned && (
-                                    <div>
-                                        <h3 className="font-bold text-slate-900 uppercase border-l-4 border-slate-300 pl-3 py-1 mb-2 text-xs tracking-wide bg-slate-50">1. Escopo Inicial (Planejado)</h3>
-                                        <p className="text-justify text-xs leading-relaxed whitespace-pre-wrap text-slate-600 pl-4">{formData.tasksPlanned}</p>
-                                    </div>
-                                )}
-                                
                                 <div>
-                                    <h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-3 py-1 mb-2 text-xs tracking-wide bg-orange-50">2. Serviços Executados</h3>
+                                    <h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-3 py-1 mb-2 text-xs tracking-wide bg-orange-50">1. Serviços Executados</h3>
                                     <div className="text-justify text-xs leading-relaxed whitespace-pre-wrap text-slate-800 pl-4 min-h-[60px]">{formData.tasksExecuted}</div>
                                 </div>
 
                                 {formData.notes && (
                                     <div>
-                                        <h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-3 py-1 mb-2 text-xs tracking-wide bg-blue-50">3. Observações / Pendências</h3>
+                                        <h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-3 py-1 mb-2 text-xs tracking-wide bg-blue-50">2. Observações / Pendências</h3>
                                         <p className="text-justify text-xs leading-relaxed whitespace-pre-wrap italic text-slate-600 pl-4">{formData.notes}</p>
                                     </div>
                                 )}
