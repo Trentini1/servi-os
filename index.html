@@ -222,9 +222,22 @@
                 clientSignature: null
             });
 
+            // ATUALIZAR TÍTULO DA PÁGINA (Para nomear o PDF automaticamente)
+            useEffect(() => {
+                if (formData.vesselName && formData.startDate) {
+                    const cleanVessel = formData.vesselName.replace(/[^a-zA-Z0-9 ]/g, "").toUpperCase();
+                    const position = formData.enginePosition || 'NA';
+                    // Formato: NOME - POSICAO - DATA
+                    document.title = `${cleanVessel} - ${position} - ${formData.startDate}`;
+                } else {
+                    document.title = "Relatório Técnico - Retiblocos";
+                }
+            }, [formData.vesselName, formData.startDate, formData.enginePosition]);
+
             const shareData = async () => {
                 const dataStr = JSON.stringify(formData, null, 2);
-                const fileName = `RB_${formData.vesselName.replace(/\s+/g, '_')}_${formData.startDate}.json`;
+                // Atualizado para seguir o padrão do PDF
+                const fileName = `${formData.vesselName.toUpperCase()} - ${formData.enginePosition || 'NA'} - ${formData.startDate}.json`;
                 const file = new File([dataStr], fileName, { type: 'application/json' });
 
                 if (navigator.share && navigator.canShare({ files: [file] })) {
