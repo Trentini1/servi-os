@@ -2,7 +2,7 @@
 
 const { useState, useEffect, useRef, useMemo } = React;
 
-// 1. CONFIGURAÇÃO FIREBASE (MODO COMPATIBILIDADE)
+// 1. CONFIGURAÇÃO FIREBASE (Mantenha igual, funciona com seu HTML)
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -42,7 +42,9 @@ const Icons = {
     Clock: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
     Calendar: (props) => <Icon {...props} path={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} />,
     ChevronLeft: (props) => <Icon {...props} path={<><path d="m15 18-6-6 6-6"/></>} />,
-    ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />
+    ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />,
+    Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
+    Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />
 };
 
 // 3. DADOS ESTÁTICOS
@@ -79,7 +81,7 @@ const IntroAnimation = ({ onFinish }) => {
     useEffect(() => {
         const timer = setTimeout(() => {
             onFinish();
-        }, 2500); // 2.5s de duração da animação
+        }, 2500); 
         return () => clearTimeout(timer);
     }, []);
 
@@ -147,7 +149,8 @@ const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                 title: r.vesselName, 
                 time: `${r.startTime || '08:00'} - ${r.endTime || '18:00'}`,
                 type: 'report', 
-                id: r.id 
+                id: r.id,
+                data: r
             });
         });
         // Agendamentos (Futuros)
@@ -180,12 +183,11 @@ const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
             const dayEvents = events.filter(e => e.date === dateStr);
             
             days.push(
-                <div key={day} onClick={() => onDateClick(dateStr, dayEvents)} className="calendar-day cursor-pointer hover:bg-slate-700 transition-colors">
+                <div key={day} onClick={() => onDateClick(dateStr, dayEvents)} className="calendar-day cursor-pointer hover:bg-slate-700 transition-colors h-24 p-1 border border-slate-700/50 relative">
                     <span className={`absolute top-1 right-1 text-xs font-bold ${dayEvents.length > 0 ? 'text-white' : 'text-slate-500'}`}>{day}</span>
-                    <div className="flex flex-col gap-1 mt-5">
+                    <div className="flex flex-col gap-1 mt-5 overflow-hidden">
                         {dayEvents.map((ev, idx) => (
                             <div key={idx} className={`text-[8px] px-1 py-0.5 rounded truncate font-bold border-l-2 ${ev.type === 'report' ? 'bg-green-900/40 text-green-200 border-green-500' : 'bg-orange-900/40 text-orange-200 border-orange-500'}`}>
-                                <div className="leading-none">{ev.time}</div>
                                 <div className="truncate">{ev.title}</div>
                             </div>
                         ))}
@@ -204,8 +206,8 @@ const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                 <button onClick={nextMonth} className="p-2 hover:bg-slate-700 rounded-lg text-slate-300"><Icons.ChevronRight/></button>
             </div>
             
-            <div className="calendar-grid">
-                {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => <div key={d} className="text-center py-2 bg-slate-800 text-[10px] uppercase text-slate-400 font-bold">{d}</div>)}
+            <div className="grid grid-cols-7 gap-1">
+                {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => <div key={d} className="text-center py-2 bg-slate-800 text-[10px] uppercase text-slate-400 font-bold rounded-t-lg">{d}</div>)}
                 {renderDays()}
             </div>
             
@@ -223,16 +225,17 @@ const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
 
 // --- APP PRINCIPAL ---
 function App() {
-    const [view, setView] = useState('intro'); // Inicia na Intro
+    const [view, setView] = useState('intro');
     const [user, setUser] = useState(null);
     const [reports, setReports] = useState([]);
     const [schedules, setSchedules] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     
-    // Estado para Agendamento
+    // Estado para Agendamento e Modal de Dia
     const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedDateEvents, setSelectedDateEvents] = useState(null); // { date: '...', events: [] }
 
     // Estado do Formulário
     const initialFormState = {
@@ -247,16 +250,14 @@ function App() {
     const [formData, setFormData] = useState(initialFormState);
     const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
 
-    // Remove loading do HTML quando o React monta
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
-    // Lógica da Intro (Só primeira vez)
+    // Lógica da Intro
     useEffect(() => {
         const hasSeenIntro = localStorage.getItem('hasSeenIntro');
         if (hasSeenIntro) {
             setView('dashboard');
         }
-        // Se não viu, o estado inicial já é 'intro', então renderiza a animação
     }, []);
 
     // AUTH
@@ -270,12 +271,10 @@ function App() {
     useEffect(() => {
         if (!user || !db) return;
         
-        // Relatórios (Passado)
         const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports')
             .orderBy('savedAt', 'desc').limit(50)
             .onSnapshot(s => setReports(s.docs.map(d => ({ id: d.id, ...d.data() }))));
         
-        // Agendamentos (Futuro)
         const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules')
             .orderBy('date', 'asc')
             .onSnapshot(s => setSchedules(s.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -283,47 +282,71 @@ function App() {
         return () => { unsubReports(); unsubSchedules(); };
     }, [user]);
 
-    // --- AÇÕES DO SISTEMA ---
-    
-    // Finalizar Intro
     const finishIntro = () => {
         localStorage.setItem('hasSeenIntro', 'true');
         setView('dashboard');
     };
 
-    // Agendamentos
+    // --- LÓGICA DE AGENDAMENTO (CRIAR, EDITAR, DELETAR) ---
     const saveSchedule = async () => {
         if(!scheduleData.date || !scheduleData.vesselName) return alert("Preencha data e embarcação");
         try {
-            await db.collection('artifacts').doc(appId).collection('schedules').add(scheduleData);
+            const colRef = db.collection('artifacts').doc(appId).collection('schedules');
+            if (scheduleData.id) {
+                // EDIÇÃO
+                await colRef.doc(scheduleData.id).update(scheduleData);
+                alert("Agendamento atualizado!");
+            } else {
+                // CRIAÇÃO
+                await colRef.add(scheduleData);
+                alert("Agendado com sucesso!");
+            }
             setShowScheduleModal(false);
             setScheduleData({ date: '', vesselName: '', description: '' });
-            alert("Agendado com sucesso!");
-        } catch(e) { alert("Erro ao agendar."); }
+            setSelectedDateEvents(null); // Fecha o modal de dia também se estiver aberto
+        } catch(e) { 
+            console.error(e);
+            alert("Erro ao salvar agendamento."); 
+        }
     };
 
     const deleteSchedule = async (id) => {
-        if(!confirm("Excluir agendamento?")) return;
-        await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete();
+        if(!confirm("Tem certeza que deseja EXCLUIR este agendamento?")) return;
+        try {
+            await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete();
+            // Atualiza a lista local do modal se estiver aberto
+            if(selectedDateEvents) {
+                setSelectedDateEvents(prev => ({
+                    ...prev,
+                    events: prev.events.filter(e => e.id !== id)
+                }));
+            }
+        } catch(e) {
+            alert("Erro ao excluir.");
+        }
     };
 
-    // Relatórios
+    const openEditSchedule = (schedule) => {
+        setScheduleData(schedule);
+        setShowScheduleModal(true);
+    };
+
+    // --- LÓGICA DE RELATÓRIOS ---
+
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
-    const editReport = (e, report) => { e.stopPropagation(); setFormData(report); setView('form'); };
+    const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
     const deleteReport = async (e, id) => {
-        e.stopPropagation();
+        if(e) e.stopPropagation();
         if (!confirm("Excluir este relatório?")) return;
         try { await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
     };
 
-    // Salvar Nuvem
     const saveToCloud = async (dataToSave = null, silent = false) => {
         if (!user) return alert("Conectando...");
         if (!silent) setIsSaving(true);
         const payload = dataToSave || formData;
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
-            // Verificação de tamanho
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
             if (jsonSize > 950000) { 
                 alert(`ERRO: Relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). Limite 1MB.`); 
@@ -343,7 +366,6 @@ function App() {
         finally { if(!silent) setIsSaving(false); }
     };
 
-    // Handlers
     const handlePhotoUpload = async (e) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
@@ -363,13 +385,11 @@ function App() {
     const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
+    
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
     
-    // Auto-Save ao finalizar
     const finalizeReport = async (clientSig) => {
         const finalData = { ...formData, clientSignature: clientSig };
-        const jsonSize = new Blob([JSON.stringify(finalData)]).size;
-        if (jsonSize > 950000) return alert(`Muito pesado (${(jsonSize/1024).toFixed(0)}KB). Remova fotos.`);
         setFormData(finalData);
         const saved = await saveToCloud(finalData, true);
         setView('preview');
@@ -394,17 +414,11 @@ function App() {
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
-    useEffect(() => {
-        if (view === 'form' && formData.vesselName) document.title = `${formData.vesselName} - ${formData.startDate}`;
-        else document.title = "Retiblocos System";
-    }, [formData, view]);
-
     const filteredReports = reports.filter(r => 
         (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // --- RENDER ---
     return (
         <div className="min-h-screen">
             
@@ -424,7 +438,7 @@ function App() {
                         <Icons.ArrowLeft className="rotate-180 opacity-50 group-hover:opacity-100 transition-opacity"/>
                     </button>
 
-                    {/* Botões de Acesso Rápido */}
+                    {/* Botões de Acesso Rápido - BOTÃO DO CALENDÁRIO ESTÁ AQUI */}
                     <div className="grid grid-cols-2 gap-3">
                         <button onClick={() => setView('calendar')} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500 transition-all text-left group">
                             <div className="bg-blue-900/50 p-2 rounded-lg w-fit mb-2 text-blue-400 group-hover:text-white transition-colors"><Icons.Calendar size={20}/></div>
@@ -441,12 +455,38 @@ function App() {
                     <div className="space-y-4 pt-2">
                         <div className="flex justify-between items-center"><h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Histórico Recente</h3><div className="relative"><Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/><input type="text" placeholder="Buscar..." className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-40" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
                         <div className="grid gap-3">
-                            {filteredReports.map(rep => (
-                                <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group relative overflow-hidden">
-                                    <div className="flex justify-between items-start mb-2"><div><h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4><span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span></div><div className="flex gap-2"><button onClick={(e) => editReport(e, rep)} className="p-2 bg-blue-600/10 text-blue-400 rounded-lg"><Icons.Pen size={16}/></button><button onClick={(e) => deleteReport(e, rep.id)} className="p-2 bg-red-600/10 text-red-400 rounded-lg"><Icons.Trash size={16}/></button></div></div>
-                                    <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3"><span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span><span>•</span><span>{rep.maintenanceType}</span></div>
-                                </div>
-                            ))}
+                            {filteredReports.map(rep => {
+                                const isSigned = !!rep.technicianSignature;
+                                return (
+                                    <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group relative overflow-hidden">
+                                        {/* STATUS INDICATOR (FINALIZADO/PENDENTE) */}
+                                        <div className="absolute top-2 right-2 flex gap-2">
+                                            <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${isSigned ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                                                {isSigned ? <Icons.Check size={10}/> : <Icons.Alert size={10}/>}
+                                                {isSigned ? 'Assinado' : 'Pendente'}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-between items-start mb-2 pr-20">
+                                            <div>
+                                                <h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4>
+                                                <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3">
+                                            <span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span>
+                                            <span>•</span>
+                                            <span>{rep.maintenanceType}</span>
+                                        </div>
+                                        
+                                        <div className="flex gap-2 mt-3">
+                                            <button onClick={(e) => editReport(e, rep)} className="flex-1 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 text-xs font-bold flex items-center justify-center gap-1"><Icons.Pen size={12}/> Abrir</button>
+                                            <button onClick={(e) => deleteReport(e, rep.id)} className="w-10 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600/20 flex items-center justify-center"><Icons.Trash size={14}/></button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -464,17 +504,20 @@ function App() {
                         reports={reports} 
                         schedules={schedules} 
                         onDateClick={(date, events) => {
-                            if(events.length > 0) alert(`Eventos em ${new Date(date).toLocaleDateString('pt-BR')}:\n\n` + events.map(e => `${e.type === 'report' ? '✅ Realizado:' : '📅 Previsto:'} ${e.title} (${e.time})`).join('\n'));
-                            else if(confirm(`Agendar serviço para ${new Date(date).toLocaleDateString('pt-BR')}?`)) {
-                                setScheduleData({...scheduleData, date}); setShowScheduleModal(true);
+                            if(events.length > 0) {
+                                setSelectedDateEvents({ date, events });
+                            } else {
+                                if(confirm(`Agendar serviço para ${new Date(date).toLocaleDateString('pt-BR')}?`)) {
+                                    setScheduleData({...scheduleData, date, id: null}); setShowScheduleModal(true);
+                                }
                             }
                         }} 
-                        onAddSchedule={() => setShowScheduleModal(true)} 
+                        onAddSchedule={() => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
                     />
                 </div>
             )}
 
-            {/* HEADER FORM/PREVIEW (Só aparece nessas telas) */}
+            {/* HEADER FORM/PREVIEW */}
             {(view === 'form' || view === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -491,7 +534,6 @@ function App() {
             {/* FORMULÁRIO */}
             {view === 'form' && (
                 <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
-                    {/* ... SEÇÕES DO FORMULÁRIO (Mantidas Iguais) ... */}
                      <div className="space-y-4">
                         <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Informações</h3>
                         <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 text-orange-400 font-bold uppercase" placeholder="Nº Controle (EX: 1442)" value={formData.controlNumber} onChange={e => setFormData({...formData, controlNumber: e.target.value})} />
@@ -559,27 +601,98 @@ function App() {
                         </div>
                     </div>
 
+                    {/* BARRA DE AÇÃO FIXA / LÓGICA DE ASSINATURA */}
                     <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900/95 backdrop-blur border-t border-slate-700 z-40">
                         <div className="max-w-2xl mx-auto">
-                            <button disabled={!isFormValid()} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
-                                <Icons.Pen size={20} /> Assinar e Finalizar
+                            {formData.technicianSignature ? (
+                                <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-green-500">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white"><Icons.Check/></div>
+                                        <div>
+                                            <p className="text-green-400 font-bold text-sm uppercase">Relatório Assinado</p>
+                                            <p className="text-[10px] text-slate-400">Técnico confirmou.</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => { if(confirm("Deseja remover a assinatura e desbloquear o relatório?")) setFormData({...formData, technicianSignature: null}); }} 
+                                        className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2"
+                                    >
+                                        Remover/Corrigir
+                                    </button>
+                                </div>
+                            ) : (
+                                <button disabled={!isFormValid()} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
+                                    <Icons.Pen size={20} /> Assinar e Finalizar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL AGENDAMENTO (CRIAR/EDITAR) */}
+            {showScheduleModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
+                        <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>
+                        <div className="space-y-3">
+                            <input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
+                            <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
+                            <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => setShowScheduleModal(false)} className="flex-1 py-2 text-slate-400">Cancelar</button>
+                            <button onClick={saveSchedule} className="flex-1 py-2 bg-orange-600 text-white rounded font-bold">
+                                {scheduleData.id ? 'Atualizar' : 'Agendar'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* MODAL AGENDAMENTO */}
-            {showScheduleModal && (
+            {/* MODAL DETALHES DO DIA (LISTA DE EVENTOS PARA EDITAR/EXCLUIR) */}
+            {selectedDateEvents && (
                 <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
-                        <h3 className="text-lg font-bold text-white mb-4">Novo Agendamento</h3>
-                        <div className="space-y-3">
-                            <input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
-                            <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
-                            <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
+                    <div className="bg-slate-800 rounded-xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
+                        <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-white capitalize">{new Date(selectedDateEvents.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+                            <button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><Icons.ArrowLeft className="rotate-180"/></button>
                         </div>
-                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-2 text-slate-400">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-2 bg-orange-600 text-white rounded font-bold">Agendar</button></div>
+                        <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                            {selectedDateEvents.events.length === 0 && <p className="text-slate-500 text-center py-4">Nenhum evento.</p>}
+                            {selectedDateEvents.events.map((evt, idx) => (
+                                <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${evt.type === 'report' ? 'bg-green-900/20 border-green-500/30' : 'bg-orange-900/20 border-orange-500/30'}`}>
+                                    <div className="overflow-hidden mr-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
+                                                {evt.type === 'report' ? 'Realizado' : 'Agendado'}
+                                            </span>
+                                            <span className="text-xs text-slate-400 font-mono">{evt.time}</span>
+                                        </div>
+                                        <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>
+                                        {evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
+                                    </div>
+                                    <div className="flex gap-2 shrink-0">
+                                        {evt.type === 'schedule' ? (
+                                            <>
+                                                <button onClick={() => openEditSchedule(evt)} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button>
+                                                <button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button>
+                                            </>
+                                        ) : (
+                                            <button onClick={() => { setSelectedDateEvents(null); editReport(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="p-4 border-t border-slate-700 bg-slate-900/50">
+                            <button 
+                                onClick={() => { setScheduleData({date: selectedDateEvents.date, vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
+                                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"
+                            >
+                                <Icons.Plus size={16}/> Adicionar Outro Agendamento
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -604,7 +717,7 @@ function App() {
                 </div>
             )}
 
-            {/* LAYOUT DE IMPRESSÃO (PDF) - Oculto na tela normal */}
+            {/* LAYOUT DE IMPRESSÃO (PDF) */}
             <div className="print-only print-container bg-white text-slate-900 relative">
                 <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
                     <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
