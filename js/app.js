@@ -1,5 +1,22 @@
 // --- IMPORTANTE: ESTE É O ARQUIVO QUE VAI NA PASTA "js" COM O NOME "app.js" ---
 
+// --- TRAVA DE SEGURANÇA (Debug) ---
+if (typeof firebase === 'undefined') {
+    const errorMsg = "ERRO CRÍTICO: Firebase não encontrado.\n\nVocê provavelmente não atualizou o arquivo 'index.html' com os scripts corretos (-compat.js) ou o navegador bloqueou o carregamento.\n\nVerifique o console para mais detalhes.";
+    console.error(errorMsg);
+    // Para o loading e mostra erro na tela
+    setTimeout(() => {
+        const loader = document.getElementById('loading-screen');
+        if (loader) {
+            loader.innerHTML = `<div style="color:#ef4444;text-align:center;padding:20px;font-family:sans-serif;max-width:400px;">
+                <h3 style="font-size:20px;margin-bottom:10px;">⛔ Erro de Configuração</h3>
+                <p style="font-size:14px;color:#cbd5e1;">${errorMsg.replace(/\n/g, '<br>')}</p>
+            </div>`;
+        }
+    }, 1000);
+    throw new Error(errorMsg);
+}
+
 const { useState, useEffect, useRef } = React;
 
 // --- 1. CONFIGURAÇÃO DO FIREBASE (MODO COMPATIBILIDADE) ---
