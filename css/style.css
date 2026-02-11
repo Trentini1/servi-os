@@ -1,0 +1,130 @@
+/* --- CONFIGURAÇÕES GERAIS --- */
+body {
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.font-logo {
+    font-family: 'Anton', sans-serif;
+    letter-spacing: 1px;
+}
+
+/* --- LOGO RETIBLOCOS (Clone CSS) --- */
+/* Isso recria aquele efeito de texto azul com borda laranja da imagem */
+.retiblocos-logo {
+    color: #0e5c94; /* Azul Profundo */
+    text-shadow: 
+        2px 2px 0px #f97316, 
+        -1px -1px 0 #f97316,  
+        1px -1px 0 #f97316,
+        -1px 1px 0 #f97316,
+        1px 1px 0 #f97316;
+}
+
+.retiblocos-sub {
+    background-color: #f97316; /* Laranja da Marca */
+    color: #0e5c94;
+    font-weight: 800;
+}
+
+/* --- COMPORTAMENTO DA ASSINATURA --- */
+/* Impede que a tela role quando o técnico tenta assinar com o dedo */
+canvas {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: crosshair;
+}
+
+/* --- ANIMAÇÕES --- */
+/* Entrada suave de elementos */
+.fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Sidebar (Menu Lateral) */
+.sidebar-overlay {
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-content {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- REGRAS DE IMPRESSÃO (A4) --- */
+/* Aqui acontece a mágica do PDF */
+@media print {
+    @page {
+        margin: 10mm; /* Margem segura para não cortar em impressoras comuns */
+        size: A4;
+    }
+
+    body {
+        -webkit-print-color-adjust: exact; /* Força o navegador a imprimir cores de fundo */
+        print-color-adjust: exact;
+        background-color: white !important;
+        color: #0f172a !important; /* Slate-900 para contraste máximo */
+        font-size: 12pt; /* Tamanho legível em papel */
+    }
+
+    /* Esconde elementos de interface na hora de imprimir */
+    .no-print, 
+    .no-print * {
+        display: none !important;
+        height: 0;
+        width: 0;
+        overflow: hidden;
+    }
+
+    /* Mostra elementos exclusivos de impressão */
+    .print-only {
+        display: block !important;
+        width: 100%;
+        position: relative;
+    }
+
+    /* Evita quebras de página bizarras (ex: cortar uma foto ao meio) */
+    .page-break {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Remove scrollbars feias */
+    ::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Garante que o header de impressão cole no topo */
+    .header-strip {
+        width: 100%;
+        background-color: #1e293b !important; /* Slate-800 */
+        color: white !important;
+        -webkit-print-color-adjust: exact;
+    }
+    
+    /* Força cores de badges e tabelas */
+    .bg-slate-100 { background-color: #f1f5f9 !important; }
+    .bg-slate-800 { background-color: #1e293b !important; color: white !important; }
+    .bg-orange-600 { background-color: #ea580c !important; }
+}
+
+/* --- REGRAS DE TELA (NÃO IMPRESSÃO) --- */
+/* Esconde o layout A4 enquanto você está usando o app no celular */
+.print-only {
+    display: none;
+}
