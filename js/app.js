@@ -1,10 +1,8 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, updateDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+// --- IMPORTANTE: ESTE É O ARQUIVO QUE VAI NA PASTA "js" COM O NOME "app.js" ---
 
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef } = React;
 
-// --- CONFIGURAÇÃO DO FIREBASE ---
+// --- 1. CONFIGURAÇÃO DO FIREBASE (MODO COMPATIBILIDADE) ---
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -14,14 +12,15 @@ const firebaseConfig = {
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = 'retiblocos-v1';
+// Inicializa o Firebase se ainda não estiver rodando
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const db = firebase.firestore();
+const appId = 'retiblocos-v1'; // Identificador do banco
 
-// --- UTILITÁRIOS ---
-// Função de Compressão AGRESSIVA para evitar erro no Firestore
-// Reduzi max width para 600px e quality para 0.5
+// --- 2. UTILITÁRIOS (Compressão de Imagem) ---
 const compressImage = (file, quality = 0.5, maxWidth = 600) => {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -33,25 +32,17 @@ const compressImage = (file, quality = 0.5, maxWidth = 600) => {
                 const elem = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-
-                // Redimensionamento proporcional
-                if (width > maxWidth) {
-                    height *= maxWidth / width;
-                    width = maxWidth;
-                }
-
-                elem.width = width;
-                elem.height = height;
+                if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+                elem.width = width; elem.height = height;
                 const ctx = elem.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                // Converte para JPEG com qualidade reduzida
                 resolve(elem.toDataURL('image/jpeg', quality));
             };
         };
     });
 };
 
-// --- ÍCONES SVG ---
+// --- 3. ÍCONES (SVG) ---
 const Icon = ({ path, size = 18, className = "" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
 );
@@ -80,7 +71,7 @@ const SAAM_BRANCHES = [ "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Br
 const MAINTENANCE_TYPES = [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ];
 const ENGINE_POSITIONS = [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ];
 const PART_SOURCES = ["Retiblocos", "Cliente"];
-const MAX_PHOTOS = 6; // Limite de fotos
+const MAX_PHOTOS = 6;
 
 // --- COMPONENTE: ASSINATURA ---
 const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
@@ -144,18 +135,21 @@ function App() {
 
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
-    // Auth & Data Fetching
+    // AUTH
     useEffect(() => {
-        signInAnonymously(auth).catch(console.error);
-        return onAuthStateChanged(auth, (u) => setUser(u));
+        auth.signInAnonymously().catch(console.error);
+        return auth.onAuthStateChanged(u => setUser(u));
     }, []);
 
+    // LISTENER
     useEffect(() => {
         if (!user) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'reports'), orderBy('savedAt', 'desc'), limit(50));
-        return onSnapshot(q, (snapshot) => {
-            setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }, console.error);
+        // Sintaxe Compat v8 (usando collection e orderBy)
+        return db.collection('artifacts').doc(appId).collection('public/data/reports')
+            .orderBy('savedAt', 'desc').limit(50)
+            .onSnapshot(snapshot => {
+                setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, console.error);
     }, [user]);
 
     const filteredReports = reports.filter(r => 
@@ -165,74 +159,49 @@ function App() {
 
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
     const editReport = (e, report) => { e.stopPropagation(); setFormData(report); setView('form'); };
+    
     const deleteReport = async (e, id) => {
         e.stopPropagation();
-        if (!confirm("Excluir este relatório permanentemente?")) return;
-        try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', id)); } catch (e) { alert("Erro ao excluir."); }
+        if (!confirm("Excluir este relatório?")) return;
+        try { await db.collection('artifacts').doc(appId).collection('public/data/reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
     };
 
-    // FUNÇÃO PRINCIPAL DE SALVAMENTO (Retorna sucesso ou falha)
     const saveToCloud = async (dataToSave = null, silent = false) => {
-        if (!user) {
-            alert("Aguarde a conexão com a nuvem...");
-            return false;
-        }
+        if (!user) return alert("Conectando...");
         if (!silent) setIsSaving(true);
-        
         const payload = dataToSave || formData;
-
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
-            
-            // Verificação de segurança de tamanho
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            // 950KB margem de segurança (1MB limite)
             if (jsonSize > 950000) { 
-                alert(`ERRO AO SALVAR: O arquivo ficou muito pesado (${(jsonSize/1024).toFixed(0)}KB). O limite é 1MB. Por favor, remova uma ou duas fotos e tente novamente.`); 
-                if(!silent) setIsSaving(false); 
-                return false; // Retorna falha
+                alert(`ERRO: Relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). O limite é 1MB. Remova algumas fotos.`); 
+                if(!silent) setIsSaving(false); return false; 
             }
-
+            const collectionRef = db.collection('artifacts').doc(appId).collection('public/data/reports');
             if (payload.id) {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', payload.id), docData);
+                await collectionRef.doc(payload.id).update(docData);
             } else {
-                const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'reports'), docData);
+                const ref = await collectionRef.add(docData);
                 setFormData(prev => ({ ...prev, id: ref.id }));
             }
             if(!silent) alert("Salvo com sucesso!");
-            return true; // Retorna sucesso
-        } catch (e) { 
-            console.error(e); 
-            alert("Erro de conexão ao salvar."); 
-            return false;
-        } finally { 
-            if(!silent) setIsSaving(false); 
-        }
+            return true;
+        } catch (e) { console.error(e); alert("Erro ao salvar."); return false; } 
+        finally { if(!silent) setIsSaving(false); }
     };
 
-    // --- HANDLERS ---
+    // Handlers
     const handlePhotoUpload = async (e) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
             const remainingSlots = MAX_PHOTOS - formData.photos.length;
-            
-            if (remainingSlots <= 0) {
-                alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
-                return;
-            }
-
+            if (remainingSlots <= 0) return alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
             const filesToProcess = files.slice(0, remainingSlots);
-            
-            // Processa compressão AGRESSIVA
             const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
-                const compressedUrl = await compressImage(file, 0.5, 600); // 0.5 qualidade, 600px max
+                const compressedUrl = await compressImage(file, 0.5, 600);
                 return { id: Date.now() + Math.random(), url: compressedUrl, caption: '' };
             }));
-
-            setFormData(prev => ({
-                ...prev,
-                photos: [...prev.photos, ...processedPhotos]
-            }));
+            setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
         }
     };
 
@@ -240,40 +209,20 @@ function App() {
     const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
-    
-    // Fluxo de Assinatura
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
     
-    // Assinatura Final dispara salvamento automático COM verificação
     const finalizeReport = async (clientSig) => {
         const finalData = { ...formData, clientSignature: clientSig };
-        
-        // Verifica tamanho ANTES de mudar de tela
         const jsonSize = new Blob([JSON.stringify(finalData)]).size;
-        
-        if (jsonSize > 950000) {
-             alert(`ATENÇÃO: Não foi possível finalizar. O relatório está com ${(jsonSize/1024).toFixed(0)}KB (Limite 950KB). \n\nPor favor, volte e exclua 1 ou 2 fotos.`);
-             // Não muda a view, mantém o usuário na tela de assinatura para ele poder cancelar e voltar
-             return;
-        }
-
+        if (jsonSize > 950000) return alert(`Arquivo muito pesado (${(jsonSize/1024).toFixed(0)}KB). Remova fotos.`);
         setFormData(finalData);
-        // Tenta salvar
-        const saved = await saveToCloud(finalData, true); // Silent save
-        
-        if (saved) {
-            setView('preview');
-        } else {
-            // Se falhar o salvamento (ex: sem internet), avisa mas permite o preview local
-            if(confirm("Não foi possível salvar na nuvem (sem internet?), mas você pode gerar o PDF localmente. Deseja prosseguir para o PDF?")) {
-                setView('preview');
-            }
-        }
+        const saved = await saveToCloud(finalData, true);
+        if (saved) setView('preview');
+        else if(confirm("Erro ao salvar na nuvem. Gerar PDF localmente?")) setView('preview');
     };
 
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
-
     const isFormValid = () => formData.vesselName && formData.technicianName;
     const calculateDuration = () => {
         const s = new Date(`${formData.startDate}T${formData.startTime}`), e = new Date(`${formData.endDate}T${formData.endTime}`);
@@ -281,28 +230,21 @@ function App() {
         return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
     };
     const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR');
-
     const shareData = async () => {
         const dataStr = JSON.stringify(formData, null, 2);
-        const fileName = `${formData.vesselName.toUpperCase()} - ${formData.enginePosition || 'NA'} - ${formData.startDate}.json`;
+        const fileName = `BACKUP_RB_${formData.vesselName}.json`;
         const file = new File([dataStr], fileName, { type: 'application/json' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ title: 'Backup Retiblocos', text: 'Backup de dados.', files: [file] }); } catch (err) { console.log('Erro', err); }
-        } else {
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            const link = document.createElement('a'); link.href = dataUri; link.download = fileName; link.click();
-        }
+        if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
+        else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
     useEffect(() => {
-        if (view === 'form' && formData.vesselName) { document.title = `${formData.vesselName} - ${formData.startDate}`; } 
-        else { document.title = "Retiblocos System"; }
+        if (view === 'form' && formData.vesselName) document.title = `${formData.vesselName} - ${formData.startDate}`;
+        else document.title = "Retiblocos System";
     }, [formData, view]);
 
     return (
         <div className="min-h-screen">
-            
-            {/* DASHBOARD */}
             {view === 'dashboard' && (
                 <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex justify-between items-center py-4">
@@ -314,18 +256,12 @@ function App() {
                         <Icons.ArrowLeft className="rotate-180 opacity-50 group-hover:opacity-100 transition-opacity"/>
                     </button>
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Histórico</h3>
-                            <div className="relative"><Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/><input type="text" placeholder="Buscar..." className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div>
-                        </div>
+                        <div className="flex justify-between items-center"><h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Histórico</h3><div className="relative"><Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/><input type="text" placeholder="Buscar..." className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
                         <div className="grid gap-3">
                             {filteredReports.length === 0 ? (<div className="text-center py-10 bg-slate-800/50 rounded-xl border border-dashed border-slate-700"><p className="text-slate-500 text-sm">Nada encontrado.</p></div>) : (
                                 filteredReports.map(rep => (
                                     <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group relative overflow-hidden">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div><h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4><span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span></div>
-                                            <div className="flex gap-2"><button onClick={(e) => editReport(e, rep)} className="p-2 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-colors"><Icons.Pen size={16}/></button><button onClick={(e) => deleteReport(e, rep.id)} className="p-2 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors"><Icons.Trash size={16}/></button></div>
-                                        </div>
+                                        <div className="flex justify-between items-start mb-2"><div><h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4><span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span></div><div className="flex gap-2"><button onClick={(e) => editReport(e, rep)} className="p-2 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-colors"><Icons.Pen size={16}/></button><button onClick={(e) => deleteReport(e, rep.id)} className="p-2 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors"><Icons.Trash size={16}/></button></div></div>
                                         <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3"><span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span><span>•</span><span>{rep.maintenanceType}</span></div>
                                     </div>
                                 ))
@@ -335,7 +271,6 @@ function App() {
                 </div>
             )}
 
-            {/* HEADER FORM/PREVIEW */}
             {view !== 'dashboard' && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -349,7 +284,6 @@ function App() {
                 </div>
             )}
 
-            {/* FORMULÁRIO */}
             {view === 'form' && (
                 <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                     <div className="space-y-4">
@@ -429,11 +363,9 @@ function App() {
                 </div>
             )}
 
-            {/* ASSINATURAS */}
             {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
 
-            {/* PREVIEW FINAL (AÇÕES PÓS-SALVAMENTO) */}
             {view === 'preview' && (
                 <div className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
@@ -452,18 +384,12 @@ function App() {
                 </div>
             )}
 
-            {/* LAYOUT DE IMPRESSÃO (PDF) */}
             <div className="print-only print-container bg-white text-slate-900 relative">
                 <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
-                    <div className="flex flex-col">
-                        <h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1>
-                        <div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div>
-                    </div>
+                    <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
                     <div className="text-right">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Nº Controle</div>
-                        <div className="text-xl font-bold uppercase text-orange-600 leading-tight font-mono">{formData.controlNumber || '0000'}</div>
-                        <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div>
-                        <div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
+                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Nº Controle</div><div className="text-xl font-bold uppercase text-orange-600 leading-tight font-mono">{formData.controlNumber || '0000'}</div>
+                        <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div><div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
                     </div>
                 </div>
 
@@ -482,7 +408,7 @@ function App() {
 
                 <div className="space-y-4">
                     <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div></div>
-                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações / Pendências</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
+                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
                 </div>
 
                 {formData.parts.length > 0 && (
