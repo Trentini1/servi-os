@@ -224,6 +224,7 @@
                 engineModel: '',
                 engineSerial: '',
                 maintenanceType: MAINTENANCE_TYPES[0],
+                maintenanceTypeOther: '', // Novo campo para "Outros"
                 technicianName: '',
                 startDate: new Date().toISOString().split('T')[0],
                 startTime: '08:00',
@@ -399,10 +400,19 @@
                                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 mb-4">Intervenção</h3>
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-slate-400 font-bold uppercase">Tipo de Manutenção</label>
-                                    <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500"
+                                    <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 transition-all"
                                         value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>
                                         {MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
+                                    {formData.maintenanceType === 'Outros' && (
+                                        <input
+                                            type="text"
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 transition-colors animate-in fade-in slide-in-from-top-1 mt-2"
+                                            placeholder="Especifique o serviço..."
+                                            value={formData.maintenanceTypeOther || ''}
+                                            onChange={e => setFormData({...formData, maintenanceTypeOther: e.target.value})}
+                                        />
+                                    )}
                                 </div>
                                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
@@ -566,7 +576,9 @@
                         <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
                             <div>
                                 <span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span>
-                                <span className="font-bold text-slate-900 text-sm">{formData.maintenanceType}</span>
+                                <span className="font-bold text-slate-900 text-sm">
+                                    {formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}
+                                </span>
                             </div>
                             <div className="text-right">
                                 <span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span>
