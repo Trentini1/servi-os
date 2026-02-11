@@ -3,75 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retiblocos - Sistema de Relatórios</title>
+    <title>Retiblocos System</title>
     
-    <!-- Motor Visual (Tailwind CSS) -->
+    <!-- 1. Motor Visual (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Fontes Profissionais (Inter & JetBrains Mono) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&family=Anton&display=swap" rel="stylesheet">
+    <!-- 2. Fontes -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Anton&family=JetBrains+Mono&display=swap" rel="stylesheet">
 
-    <!-- Ícones (Lucide - opcional, mas vou usar SVGs inline no React para performance, deixei aqui por garantia) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-
-    <!-- Seu CSS Personalizado -->
+    <!-- 3. Seu CSS (A Maquiagem) -->
     <link rel="stylesheet" href="css/style.css">
 
-    <!-- Dependências do React (O Motor do App) -->
+    <!-- 4. React (O Motor) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel (Para o navegador entender o código moderno) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- SDKs do Firebase (O Banco de Dados) -->
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+    <!-- 5. Firebase Compat (O Banco de Dados) -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 
     <style>
-        /* Loading inicial para não mostrar tela branca enquanto o React carrega */
-        #loading-screen {
-            position: fixed;
-            inset: 0;
-            background-color: #0f172a;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            transition: opacity 0.5s ease;
-        }
-        .loader {
-            width: 48px;
-            height: 48px;
-            border: 5px solid #FFF;
-            border-bottom-color: #f97316; /* Laranja Retiblocos */
-            border-radius: 50%;
-            animation: rotation 1s linear infinite;
-        }
-        @keyframes rotation {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        /* Tela de Carregamento */
+        #loading-screen { position:fixed; inset:0; background:#0f172a; display:flex; justify-content:center; align-items:center; z-index:9999; }
+        .loader { width:48px; height:48px; border:5px solid #FFF; border-bottom-color:#ea580c; border-radius:50%; animation:rotation 1s linear infinite; }
+        @keyframes rotation{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 antialiased selection:bg-orange-500 selection:text-white">
+<body class="bg-slate-900 text-slate-100">
 
-    <!-- Tela de Carregamento Inicial -->
-    <div id="loading-screen">
-        <div class="flex flex-col items-center gap-4">
-            <div class="loader"></div>
-            <p class="text-slate-400 text-sm font-mono tracking-widest uppercase">Carregando Sistema...</p>
-        </div>
-    </div>
-
-    <!-- Onde o React vai injetar o App -->
+    <!-- Tela de Carregamento -->
+    <div id="loading-screen"><div class="loader"></div></div>
+    
+    <!-- Onde o App vai ser injetado -->
     <div id="root"></div>
 
-    <!-- Seu Código Javascript Principal -->
-    <!-- IMPORTANTE: type="text/babel" é essencial para o React funcionar aqui -->
-    <script type="text/babel" src="js/app.js" data-type="module"></script>
+    <!-- 6. Chama o Cérebro (Javascript) -->
+    <!-- NÃO use type="module" aqui, senão quebra o Babel -->
+    <script type="text/babel" src="js/app.js"></script>
 
 </body>
 </html>
