@@ -1,25 +1,6 @@
-// --- IMPORTANTE: ESTE É O ARQUIVO QUE VAI NA PASTA "js" COM O NOME "app.js" ---
-
-// --- TRAVA DE SEGURANÇA (Debug) ---
-if (typeof firebase === 'undefined') {
-    const errorMsg = "ERRO CRÍTICO: Firebase não encontrado.\n\nVocê provavelmente não atualizou o arquivo 'index.html' com os scripts corretos (-compat.js) ou o navegador bloqueou o carregamento.\n\nVerifique o console para mais detalhes.";
-    console.error(errorMsg);
-    // Para o loading e mostra erro na tela
-    setTimeout(() => {
-        const loader = document.getElementById('loading-screen');
-        if (loader) {
-            loader.innerHTML = `<div style="color:#ef4444;text-align:center;padding:20px;font-family:sans-serif;max-width:400px;">
-                <h3 style="font-size:20px;margin-bottom:10px;">⛔ Erro de Configuração</h3>
-                <p style="font-size:14px;color:#cbd5e1;">${errorMsg.replace(/\n/g, '<br>')}</p>
-            </div>`;
-        }
-    }, 1000);
-    throw new Error(errorMsg);
-}
-
+// --- CONFIGURAÇÃO E INICIALIZAÇÃO ---
 const { useState, useEffect, useRef } = React;
 
-// --- 1. CONFIGURAÇÃO DO FIREBASE (MODO COMPATIBILIDADE) ---
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -29,15 +10,15 @@ const firebaseConfig = {
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
 
-// Inicializa o Firebase se ainda não estiver rodando
+// Inicializa Firebase globalmente (Compat)
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const auth = firebase.auth();
 const db = firebase.firestore();
-const appId = 'retiblocos-v1'; // Identificador do banco
+const appId = 'retiblocos-v1';
 
-// --- 2. UTILITÁRIOS (Compressão de Imagem) ---
+// --- UTILITÁRIOS ---
 const compressImage = (file, quality = 0.5, maxWidth = 600) => {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -59,7 +40,7 @@ const compressImage = (file, quality = 0.5, maxWidth = 600) => {
     });
 };
 
-// --- 3. ÍCONES (SVG) ---
+// --- ÍCONES SVG ---
 const Icon = ({ path, size = 18, className = "" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
 );
@@ -79,8 +60,7 @@ const Icons = {
     Cloud: (props) => <Icon {...props} path={<><path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></>} />,
     Search: (props) => <Icon {...props} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
     Home: (props) => <Icon {...props} path={<><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>} />,
-    Close: (props) => <Icon {...props} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />,
-    List: (props) => <Icon {...props} path={<><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>} />
+    Clock: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />
 };
 
 // --- DADOS ESTÁTICOS ---
@@ -137,7 +117,6 @@ function App() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     
-    // Estado inicial limpo
     const initialFormState = {
         controlNumber: '', branch: SAAM_BRANCHES[0], vesselName: '', enginePosition: '',
         engineModel: '', engineSerial: '', maintenanceType: MAINTENANCE_TYPES[0], maintenanceTypeOther: '',
@@ -150,19 +129,19 @@ function App() {
     const [formData, setFormData] = useState(initialFormState);
     const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
 
+    // Remove loading
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
-    // AUTH
+    // AUTH (Compat Syntax)
     useEffect(() => {
         auth.signInAnonymously().catch(console.error);
         return auth.onAuthStateChanged(u => setUser(u));
     }, []);
 
-    // LISTENER
+    // FIRESTORE LISTENER (Compat Syntax)
     useEffect(() => {
         if (!user) return;
-        // Sintaxe Compat v8 (usando collection e orderBy)
-        return db.collection('artifacts').doc(appId).collection('public/data/reports')
+        return db.collection('artifacts').doc(appId).collection('public_reports') // Simplificado o caminho
             .orderBy('savedAt', 'desc').limit(50)
             .onSnapshot(snapshot => {
                 setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -180,25 +159,28 @@ function App() {
     const deleteReport = async (e, id) => {
         e.stopPropagation();
         if (!confirm("Excluir este relatório?")) return;
-        try { await db.collection('artifacts').doc(appId).collection('public/data/reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
+        try { await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
     };
 
+    // SAVE TO CLOUD (Compat Syntax)
     const saveToCloud = async (dataToSave = null, silent = false) => {
         if (!user) return alert("Conectando...");
         if (!silent) setIsSaving(true);
         const payload = dataToSave || formData;
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
+            // Check Size
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
             if (jsonSize > 950000) { 
-                alert(`ERRO: Relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). O limite é 1MB. Remova algumas fotos.`); 
+                alert(`ERRO: Relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). Remova fotos.`); 
                 if(!silent) setIsSaving(false); return false; 
             }
-            const collectionRef = db.collection('artifacts').doc(appId).collection('public/data/reports');
+            
+            const colRef = db.collection('artifacts').doc(appId).collection('public_reports');
             if (payload.id) {
-                await collectionRef.doc(payload.id).update(docData);
+                await colRef.doc(payload.id).update(docData);
             } else {
-                const ref = await collectionRef.add(docData);
+                const ref = await colRef.add(docData);
                 setFormData(prev => ({ ...prev, id: ref.id }));
             }
             if(!silent) alert("Salvo com sucesso!");
@@ -207,37 +189,48 @@ function App() {
         finally { if(!silent) setIsSaving(false); }
     };
 
-    // Handlers
+    // --- HANDLERS ---
     const handlePhotoUpload = async (e) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
             const remainingSlots = MAX_PHOTOS - formData.photos.length;
             if (remainingSlots <= 0) return alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
+            
+            // Lock UI
+            const loadingId = toast("Comprimindo fotos...");
+            
             const filesToProcess = files.slice(0, remainingSlots);
             const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
-                const compressedUrl = await compressImage(file, 0.5, 600);
+                const compressedUrl = await compressImage(file, 0.5, 600); // 50% quality, 600px
                 return { id: Date.now() + Math.random(), url: compressedUrl, caption: '' };
             }));
             setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
         }
     };
 
+    // Toast Simples
+    const toast = (msg) => { console.log(msg); };
+
     const addPart = () => { if (!newPart.name) return; setFormData(prev => ({ ...prev, parts: [...prev.parts, { ...newPart, id: Date.now() }] })); setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); };
     const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
-    const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
     
+    // AUTO SAVE FLOW
     const finalizeReport = async (clientSig) => {
         const finalData = { ...formData, clientSignature: clientSig };
+        // Check size before transition
         const jsonSize = new Blob([JSON.stringify(finalData)]).size;
         if (jsonSize > 950000) return alert(`Arquivo muito pesado (${(jsonSize/1024).toFixed(0)}KB). Remova fotos.`);
+        
         setFormData(finalData);
+        // Try auto save
         const saved = await saveToCloud(finalData, true);
-        if (saved) setView('preview');
-        else if(confirm("Erro ao salvar na nuvem. Gerar PDF localmente?")) setView('preview');
+        setView('preview');
+        if(!saved) alert("Atenção: Não foi possível salvar na nuvem (sem internet?), mas você pode gerar o PDF.");
     };
 
+    const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
     const isFormValid = () => formData.vesselName && formData.technicianName;
@@ -247,9 +240,11 @@ function App() {
         return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
     };
     const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR');
+    
+    // Share JSON
     const shareData = async () => {
         const dataStr = JSON.stringify(formData, null, 2);
-        const fileName = `BACKUP_RB_${formData.vesselName}.json`;
+        const fileName = `RB_${formData.vesselName}.json`;
         const file = new File([dataStr], fileName, { type: 'application/json' });
         if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
@@ -288,6 +283,7 @@ function App() {
                 </div>
             )}
 
+            {/* HEADER FORM/PREVIEW */}
             {view !== 'dashboard' && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -301,6 +297,7 @@ function App() {
                 </div>
             )}
 
+            {/* FORMULÁRIO */}
             {view === 'form' && (
                 <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                     <div className="space-y-4">
@@ -380,9 +377,11 @@ function App() {
                 </div>
             )}
 
+            {/* ASSINATURAS */}
             {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
 
+            {/* PREVIEW FINAL */}
             {view === 'preview' && (
                 <div className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
@@ -401,6 +400,7 @@ function App() {
                 </div>
             )}
 
+            {/* LAYOUT DE IMPRESSÃO (PDF) */}
             <div className="print-only print-container bg-white text-slate-900 relative">
                 <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
                     <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
