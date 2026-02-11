@@ -19,6 +19,35 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'retiblocos-v1';
 
+// --- UTILITÁRIOS ---
+// Função para comprimir imagem antes de salvar
+const compressImage = (file, quality = 0.6, maxWidth = 800) => {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const elem = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+
+                elem.width = width;
+                elem.height = height;
+                const ctx = elem.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(elem.toDataURL('image/jpeg', quality));
+            };
+        };
+    });
+};
+
 // --- ÍCONES SVG ---
 const Icon = ({ path, size = 18, className = "" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
@@ -38,7 +67,9 @@ const Icons = {
     Box: (props) => <Icon {...props} path={<><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></>} />,
     Cloud: (props) => <Icon {...props} path={<><path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></>} />,
     Search: (props) => <Icon {...props} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
-    Home: (props) => <Icon {...props} path={<><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>} />
+    Home: (props) => <Icon {...props} path={<><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>} />,
+    Close: (props) => <Icon {...props} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />,
+    List: (props) => <Icon {...props} path={<><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>} />
 };
 
 // --- DADOS ESTÁTICOS ---
@@ -46,6 +77,7 @@ const SAAM_BRANCHES = [ "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Br
 const MAINTENANCE_TYPES = [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ];
 const ENGINE_POSITIONS = [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ];
 const PART_SOURCES = ["Retiblocos", "Cliente"];
+const MAX_PHOTOS = 6; // Limite de fotos
 
 // --- COMPONENTE: ASSINATURA ---
 const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
@@ -88,7 +120,6 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
 
 // --- APP PRINCIPAL ---
 function App() {
-    // Mudei o estado inicial para 'dashboard'
     const [view, setView] = useState('dashboard');
     const [user, setUser] = useState(null);
     const [reports, setReports] = useState([]);
@@ -118,62 +149,102 @@ function App() {
 
     useEffect(() => {
         if (!user) return;
-        // Limitando a 50 para otimização
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'reports'), orderBy('savedAt', 'desc'), limit(50));
         return onSnapshot(q, (snapshot) => {
             setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, console.error);
     }, [user]);
 
-    // Filtragem de relatórios
     const filteredReports = reports.filter(r => 
         (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Actions
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
-    
-    const editReport = (e, report) => {
-        e.stopPropagation();
-        setFormData(report);
-        setView('form');
-    };
-
+    const editReport = (e, report) => { e.stopPropagation(); setFormData(report); setView('form'); };
     const deleteReport = async (e, id) => {
         e.stopPropagation();
         if (!confirm("Excluir este relatório permanentemente?")) return;
         try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', id)); } catch (e) { alert("Erro ao excluir."); }
     };
 
-    const saveToCloud = async () => {
+    // FUNÇÃO PRINCIPAL DE SALVAMENTO (Agora aceita dados diretos para auto-save)
+    const saveToCloud = async (dataToSave = null, silent = false) => {
         if (!user) return alert("Conectando...");
-        setIsSaving(true);
-        try {
-            const docData = { ...formData, savedAt: new Date().toISOString() };
-            const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            if (jsonSize > 950000) { alert("Muitas fotos! Reduza para salvar na nuvem."); setIsSaving(false); return; }
+        if (!silent) setIsSaving(true);
+        
+        const payload = dataToSave || formData;
 
-            if (formData.id) {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', formData.id), docData);
+        try {
+            const docData = { ...payload, savedAt: new Date().toISOString() };
+            // Verificação de segurança de tamanho
+            const jsonSize = new Blob([JSON.stringify(docData)]).size;
+            if (jsonSize > 950000) { 
+                alert("ATENÇÃO: Relatório muito pesado! O limite do banco gratuito é 1MB. Tente remover algumas fotos."); 
+                setIsSaving(false); 
+                return; 
+            }
+
+            if (payload.id) {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', payload.id), docData);
             } else {
                 const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'reports'), docData);
                 setFormData(prev => ({ ...prev, id: ref.id }));
             }
-            alert("Salvo com sucesso!");
-        } catch (e) { console.error(e); alert("Erro ao salvar."); } 
-        finally { setIsSaving(false); }
+            if(!silent) alert("Salvo com sucesso!");
+        } catch (e) { 
+            console.error(e); 
+            alert("Erro ao salvar na nuvem. Verifique a internet."); 
+        } finally { 
+            if(!silent) setIsSaving(false); 
+        }
     };
 
-    // ... (Handlers de Foto, Peças, Assinatura e Cálculo de Duração mantidos iguais) ...
-    const handlePhotoUpload = (e) => { if (e.target.files) Array.from(e.target.files).forEach(f => { const r = new FileReader(); r.onloadend = () => setFormData(p => ({...p, photos: [...p.photos, { id: Date.now()+Math.random(), url: r.result, caption: '' }]})); r.readAsDataURL(f); }); };
+    // --- HANDLERS ---
+    const handlePhotoUpload = async (e) => {
+        if (e.target.files) {
+            const files = Array.from(e.target.files);
+            const remainingSlots = MAX_PHOTOS - formData.photos.length;
+            
+            if (remainingSlots <= 0) {
+                alert(`Limite de ${MAX_PHOTOS} fotos atingido! Remova algumas antes de adicionar.`);
+                return;
+            }
+
+            const filesToProcess = files.slice(0, remainingSlots);
+            
+            // Processa compressão
+            const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
+                const compressedUrl = await compressImage(file);
+                return { id: Date.now() + Math.random(), url: compressedUrl, caption: '' };
+            }));
+
+            setFormData(prev => ({
+                ...prev,
+                photos: [...prev.photos, ...processedPhotos]
+            }));
+        }
+    };
+
     const addPart = () => { if (!newPart.name) return; setFormData(prev => ({ ...prev, parts: [...prev.parts, { ...newPart, id: Date.now() }] })); setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); };
     const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
+    
+    // Fluxo de Assinatura com Auto-Save
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
-    const saveClientSig = (d) => { setFormData(p => ({...p, clientSignature: d})); setView('preview'); };
-    const skipClientSig = () => { setFormData(p => ({...p, clientSignature: null})); setView('preview'); };
+    
+    // Assinatura Final dispara salvamento automático
+    const finalizeReport = async (clientSig) => {
+        const finalData = { ...formData, clientSignature: clientSig };
+        setFormData(finalData);
+        setView('preview');
+        await saveToCloud(finalData, true); // Auto-save silencioso
+    };
+
+    const saveClientSig = (d) => finalizeReport(d);
+    const skipClientSig = () => finalizeReport(null);
+
     const isFormValid = () => formData.vesselName && formData.technicianName;
     const calculateDuration = () => {
         const s = new Date(`${formData.startDate}T${formData.startTime}`), e = new Date(`${formData.endDate}T${formData.endTime}`);
@@ -182,87 +253,51 @@ function App() {
     };
     const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR');
 
-    // Title Effect
-    useEffect(() => {
-        if (view === 'form' && formData.vesselName) {
-            document.title = `${formData.vesselName} - ${formData.startDate}`;
+    const shareData = async () => {
+        const dataStr = JSON.stringify(formData, null, 2);
+        const fileName = `${formData.vesselName.toUpperCase()} - ${formData.enginePosition || 'NA'} - ${formData.startDate}.json`;
+        const file = new File([dataStr], fileName, { type: 'application/json' });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            try { await navigator.share({ title: 'Backup Retiblocos', text: 'Backup de dados.', files: [file] }); } catch (err) { console.log('Erro', err); }
         } else {
-            document.title = "Retiblocos System";
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const link = document.createElement('a'); link.href = dataUri; link.download = fileName; link.click();
         }
+    };
+
+    useEffect(() => {
+        if (view === 'form' && formData.vesselName) { document.title = `${formData.vesselName} - ${formData.startDate}`; } 
+        else { document.title = "Retiblocos System"; }
     }, [formData, view]);
 
     return (
         <div className="min-h-screen">
             
-            {/* --- DASHBOARD VIEW (NOVA TELA INICIAL) --- */}
+            {/* DASHBOARD */}
             {view === 'dashboard' && (
                 <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
-                    {/* Header Dashboard */}
                     <div className="flex justify-between items-center py-4">
-                        <div>
-                            <h1 className="text-2xl font-black text-white uppercase tracking-tight">Painel de Controle</h1>
-                            <p className="text-slate-400 text-sm">Bem-vindo ao sistema Retiblocos</p>
-                        </div>
+                        <div><h1 className="text-2xl font-black text-white uppercase tracking-tight">Painel de Controle</h1><p className="text-slate-400 text-sm">Bem-vindo ao sistema Retiblocos</p></div>
                         <div className="bg-orange-600 w-10 h-10 rounded-lg flex items-center justify-center font-black text-white">RB</div>
                     </div>
-
-                    {/* Botão Novo */}
                     <button onClick={startNewReport} className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white p-6 rounded-2xl shadow-xl flex items-center justify-between group transition-all transform hover:scale-[1.01]">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-white/20 p-3 rounded-xl"><Icons.Pen size={24}/></div>
-                            <div className="text-left">
-                                <h2 className="font-bold text-lg">Criar Novo Relatório</h2>
-                                <p className="text-orange-100 text-xs">Preencher OS, peças e fotos</p>
-                            </div>
-                        </div>
+                        <div className="flex items-center gap-4"><div className="bg-white/20 p-3 rounded-xl"><Icons.Pen size={24}/></div><div className="text-left"><h2 className="font-bold text-lg">Criar Novo Relatório</h2><p className="text-orange-100 text-xs">Preencher OS, peças e fotos</p></div></div>
                         <Icons.ArrowLeft className="rotate-180 opacity-50 group-hover:opacity-100 transition-opacity"/>
                     </button>
-
-                    {/* Lista de Relatórios */}
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Relatórios Salvos / Rascunhos</h3>
-                            <div className="relative">
-                                <Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/>
-                                <input 
-                                    type="text" 
-                                    placeholder="Buscar barco ou OS..." 
-                                    className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-48 transition-all"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
+                            <h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Histórico</h3>
+                            <div className="relative"><Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/><input type="text" placeholder="Buscar..." className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div>
                         </div>
-
                         <div className="grid gap-3">
-                            {filteredReports.length === 0 ? (
-                                <div className="text-center py-10 bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
-                                    <p className="text-slate-500 text-sm">Nenhum relatório encontrado.</p>
-                                </div>
-                            ) : (
+                            {filteredReports.length === 0 ? (<div className="text-center py-10 bg-slate-800/50 rounded-xl border border-dashed border-slate-700"><p className="text-slate-500 text-sm">Nada encontrado.</p></div>) : (
                                 filteredReports.map(rep => (
-                                    <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group transition-all relative overflow-hidden">
+                                    <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group relative overflow-hidden">
                                         <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4>
-                                                <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={(e) => editReport(e, rep)} className="p-2 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-colors" title="Editar">
-                                                    <Icons.Pen size={16}/>
-                                                </button>
-                                                <button onClick={(e) => deleteReport(e, rep.id)} className="p-2 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors" title="Excluir">
-                                                    <Icons.Trash size={16}/>
-                                                </button>
-                                            </div>
+                                            <div><h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4><span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span></div>
+                                            <div className="flex gap-2"><button onClick={(e) => editReport(e, rep)} className="p-2 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-colors"><Icons.Pen size={16}/></button><button onClick={(e) => deleteReport(e, rep.id)} className="p-2 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors"><Icons.Trash size={16}/></button></div>
                                         </div>
-                                        <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3">
-                                            <span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span>
-                                            <span>•</span>
-                                            <span>{rep.maintenanceType}</span>
-                                            <span>•</span>
-                                            <span className="uppercase">{rep.enginePosition}</span>
-                                        </div>
+                                        <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3"><span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span><span>•</span><span>{rep.maintenanceType}</span></div>
                                     </div>
                                 ))
                             )}
@@ -271,71 +306,43 @@ function App() {
                 </div>
             )}
 
-            {/* --- HEADER (VISÍVEL APENAS NO FORM/PREVIEW) --- */}
+            {/* HEADER FORM/PREVIEW */}
             {view !== 'dashboard' && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
-                        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-                            <Icons.Home size={18} />
-                            <span className="text-xs font-bold uppercase hidden sm:inline">Início</span>
-                        </button>
-                        <div className="flex items-center gap-2">
-                            <div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div>
-                            <span className="font-bold text-sm text-white uppercase tracking-wider">{view === 'preview' ? 'Visualizar' : 'Edição'}</span>
-                        </div>
+                        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><Icons.Home size={18} /><span className="text-xs font-bold uppercase hidden sm:inline">Início</span></button>
+                        <div className="flex items-center gap-2"><div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div><span className="font-bold text-sm text-white uppercase tracking-wider">{view === 'preview' ? 'Finalizado' : 'Edição'}</span></div>
                         <div className="flex gap-2">
-                            {view === 'form' && (
-                                <button onClick={saveToCloud} disabled={isSaving} className={`p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 flex items-center gap-2 ${isSaving ? 'opacity-50' : ''}`}>
-                                    {isSaving ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"/> : <Icons.Cloud size={18} />}
-                                    <span className="text-xs font-bold hidden sm:inline">Salvar</span>
-                                </button>
-                            )}
+                            {view === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"><Icons.Save size={18}/></button>}
                             {view === 'preview' && <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200">Editar</button>}
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* --- FORMULÁRIO (MANTIDO IDÊNTICO AO ANTERIOR COM PEQUENOS AJUSTES DE LAYOUT) --- */}
+            {/* FORMULÁRIO */}
             {view === 'form' && (
                 <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
-                    {/* ... SEÇÕES DO FORMULÁRIO (Info, Detalhes, Textos, Peças, Fotos) ... */}
-                    {/* Para economizar espaço, mantive a lógica interna igual, apenas encapsulada aqui */}
-                    
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Informações</h3>
                         <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 text-orange-400 font-bold uppercase" placeholder="Nº Controle (EX: 1442)" value={formData.controlNumber} onChange={e => setFormData({...formData, controlNumber: e.target.value})} />
-                        
-                        <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>
-                            {SAAM_BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                        </select>
-
+                        <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>{SAAM_BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}</select>
                         <div className="grid grid-cols-2 gap-4">
                             <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 uppercase font-bold" placeholder="Embarcação" value={formData.vesselName} onChange={e => setFormData({...formData, vesselName: e.target.value})} />
                             <input list="models" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Modelo Motor" value={formData.engineModel} onChange={e => setFormData({...formData, engineModel: e.target.value})} />
                             <datalist id="models"><option value="Caterpillar C32"/><option value="Caterpillar 3512"/><option value="Deutz 620"/><option value="MTU 4000"/><option value="C4.4"/></datalist>
                         </div>
-                        
                         <div className="grid grid-cols-2 gap-4">
                             <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 uppercase" placeholder="Série" value={formData.engineSerial} onChange={e => setFormData({...formData, engineSerial: e.target.value})} />
                             <input type="number" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Horímetro" value={formData.runningHours} onChange={e => setFormData({...formData, runningHours: e.target.value})} />
                         </div>
-
-                        <div className="grid grid-cols-4 gap-2">
-                            {ENGINE_POSITIONS.map(p => (
-                                <button key={p.id} onClick={() => setFormData({...formData, enginePosition: p.label})} className={`py-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>{p.short}</button>
-                            ))}
-                        </div>
+                        <div className="grid grid-cols-4 gap-2">{ENGINE_POSITIONS.map(p => (<button key={p.id} onClick={() => setFormData({...formData, enginePosition: p.label})} className={`py-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>{p.short}</button>))}</div>
                     </div>
 
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Detalhes</h3>
-                        <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>
-                            {MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                        {formData.maintenanceType === 'Outros' && (
-                            <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 mt-2" placeholder="Especifique..." value={formData.maintenanceTypeOther} onChange={e => setFormData({...formData, maintenanceTypeOther: e.target.value})} />
-                        )}
+                        <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>{MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                        {formData.maintenanceType === 'Outros' && <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 mt-2" placeholder="Especifique..." value={formData.maintenanceTypeOther} onChange={e => setFormData({...formData, maintenanceTypeOther: e.target.value})} />}
                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 grid grid-cols-2 gap-4">
                             <div><label className="text-[10px] text-slate-400 font-bold uppercase">Início</label><input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} /><input type="time" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
                             <div><label className="text-[10px] text-slate-400 font-bold uppercase">Fim</label><input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} /><input type="time" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
@@ -346,7 +353,6 @@ function App() {
                     <div className="space-y-4">
                         <label className="text-xs text-green-400 font-bold uppercase">1. Execução (Realizado)</label>
                         <textarea rows={6} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-green-500" placeholder="Descreva o serviço..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
-                        
                         <label className="text-xs text-blue-400 font-bold uppercase">2. Observações</label>
                         <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500" placeholder="Pendências..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
                     </div>
@@ -365,7 +371,10 @@ function App() {
                     </div>
 
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Fotos</h3>
+                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex justify-between items-center">
+                            <span>Fotos</span>
+                            <span className={`text-xs px-2 py-1 rounded ${formData.photos.length >= MAX_PHOTOS ? 'bg-red-900 text-red-200' : 'bg-slate-700 text-slate-300'}`}>{formData.photos.length}/{MAX_PHOTOS}</span>
+                        </h3>
                         <div className="grid grid-cols-2 gap-3">
                             {formData.photos.map(photo => (
                                 <div key={photo.id} className="relative group bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
@@ -374,9 +383,9 @@ function App() {
                                     <input type="text" placeholder="Legenda..." className="w-full bg-slate-900 text-[10px] p-2 text-slate-300 outline-none border-t border-slate-700" value={photo.caption} onChange={e => updateCaption(photo.id, e.target.value)} />
                                 </div>
                             ))}
-                            <label className="h-32 border-2 border-dashed border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500 transition-all">
+                            <label className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${formData.photos.length >= MAX_PHOTOS ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500'}`}>
                                 <Icons.Plus size={24} /><span className="text-xs mt-2 font-bold">Add Foto</span>
-                                <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+                                <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={formData.photos.length >= MAX_PHOTOS}/>
                             </label>
                         </div>
                     </div>
@@ -392,26 +401,29 @@ function App() {
             )}
 
             {/* ASSINATURAS */}
-            {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={(d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); }} onCancel={() => setView('form')} />}
-            {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={(d) => { setFormData(p => ({...p, clientSignature: d})); setView('preview'); }} onSkip={() => { setFormData(p => ({...p, clientSignature: null})); setView('preview'); }} onCancel={() => setView('sig_tech')} />}
+            {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
+            {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
 
-            {/* PREVIEW TELA FINAL */}
+            {/* PREVIEW FINAL (AÇÕES PÓS-SALVAMENTO) */}
             {view === 'preview' && (
                 <div className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
-                    <div><h2 className="text-2xl font-bold text-white mb-1">Pronto!</h2><p className="text-slate-400 text-sm">O que deseja fazer?</p></div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-white mb-1">Salvo e Sincronizado!</h2>
+                        <p className="text-slate-400 text-sm">O relatório já está na nuvem.</p>
+                    </div>
                     <div className="w-full space-y-3">
                         <button onClick={() => window.print()} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Save size={20}/> Baixar PDF</button>
-                        <button onClick={saveToCloud} disabled={isSaving} className={`w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3 border-b-4 border-slate-900 active:border-0 active:translate-y-1 ${isSaving ? 'opacity-50' : ''}`}>
-                            {isSaving ? <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"/> : <Icons.Cloud size={20} />} Atualizar Nuvem
-                        </button>
+                        <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Compartilhar Dados</button>
                     </div>
-                    <button onClick={() => setView('form')} className="text-slate-500 text-sm hover:text-white underline">Voltar para Edição</button>
-                    <button onClick={() => setView('dashboard')} className="text-orange-500 text-sm hover:text-white underline mt-2">Ir para Dashboard</button>
+                    <div className="flex gap-4 w-full pt-4">
+                        <button onClick={startNewReport} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Novo Relatório</button>
+                        <button onClick={() => setView('dashboard')} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Ir ao Início</button>
+                    </div>
                 </div>
             )}
 
-            {/* LAYOUT DE IMPRESSÃO (PDF) - Mantido igual ao aprovado */}
+            {/* LAYOUT DE IMPRESSÃO (PDF) */}
             <div className="print-only print-container bg-white text-slate-900 relative">
                 <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
                     <div className="flex flex-col">
@@ -441,16 +453,13 @@ function App() {
 
                 <div className="space-y-4">
                     <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div></div>
-                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
+                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações / Pendências</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
                 </div>
 
                 {formData.parts.length > 0 && (
                     <div className="mt-4 break-inside-avoid">
                         <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
-                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden">
-                            <thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead>
-                            <tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody>
-                        </table>
+                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
                     </div>
                 )}
 
