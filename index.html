@@ -14,23 +14,39 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Font Inter & JetBrains Mono -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&family=Anton&display=swap" rel="stylesheet">
 
     <style>
         body { font-family: 'Inter', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .font-logo { font-family: 'Anton', sans-serif; letter-spacing: 1px; }
+
+        /* Estilo do Logo Retiblocos */
+        .retiblocos-logo {
+            color: #0e5c94; /* Azul da logo */
+            text-shadow: 
+                2px 2px 0px #f97316, 
+                -1px -1px 0 #f97316,  
+                1px -1px 0 #f97316,
+                -1px 1px 0 #f97316,
+                1px 1px 0 #f97316;
+        }
+        .retiblocos-sub {
+            background-color: #f97316;
+            color: #0e5c94;
+            font-weight: 800;
+        }
 
         /* Ajustes de Impressão A4 */
         @media print {
-            @page { margin: 0; size: A4; }
+            @page { margin: 10mm; size: A4; } /* Margens menores */
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; color: #0f172a; }
             .no-print { display: none !important; }
-            .print-only { display: flex !important; flex-direction: column; min-height: 100vh; }
+            .print-only { display: block !important; width: 100%; }
             .page-break { break-inside: avoid; }
             
-            /* Reset de Margens para o Header colar no topo */
-            .print-padding { padding: 40px; }
-            .header-strip { position: absolute; top: 0; left: 0; width: 100%; }
+            /* Remove margins do body na impressão pra aproveitar folha */
+            .print-container { padding: 0 !important; margin: 0 !important; }
         }
         .print-only { display: none; }
         
@@ -201,7 +217,7 @@
         function App() {
             const [view, setView] = useState('form');
             const [formData, setFormData] = useState({
-                controlNumber: '', // Novo
+                controlNumber: '', 
                 branch: SAAM_BRANCHES[0],
                 vesselName: '',
                 enginePosition: '',
@@ -217,12 +233,11 @@
                 notes: '',
                 runningHours: '',
                 photos: [],
-                parts: [], // Novo: { id, name, qty, source }
+                parts: [], 
                 technicianSignature: null,
                 clientSignature: null
             });
 
-            // Estado temporário para nova peça
             const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
 
             useEffect(() => {
@@ -260,14 +275,13 @@
                 reader.readAsText(fileObj);
             };
 
-            // Peças Handlers
             const addPart = () => {
                 if (!newPart.name) return;
                 setFormData(prev => ({
                     ...prev,
                     parts: [...prev.parts, { ...newPart, id: Date.now() }]
                 }));
-                setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); // Reset
+                setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); 
             };
 
             const removePart = (id) => {
@@ -329,11 +343,10 @@
                             <div className="space-y-4">
                                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 mb-4">Informações Gerais</h3>
                                 
-                                {/* Numero de Controle - NOVO */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] text-slate-400 font-bold uppercase">Número de Controle (OS/Relatório)</label>
+                                    <label className="text-[10px] text-slate-400 font-bold uppercase">Número de Controle (OS)</label>
                                     <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 font-mono text-orange-400 font-bold uppercase placeholder:text-slate-600"
-                                        placeholder="EX: 2024/001"
+                                        placeholder="EX: 1442"
                                         value={formData.controlNumber} onChange={e => setFormData({...formData, controlNumber: e.target.value})} />
                                 </div>
 
@@ -354,7 +367,7 @@
                                         <label className="text-[10px] text-slate-400 font-bold uppercase">Modelo Motor</label>
                                         <input list="models" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500"
                                             value={formData.engineModel} onChange={e => setFormData({...formData, engineModel: e.target.value})} />
-                                        <datalist id="models"><option value="Caterpillar C32"/><option value="Caterpillar 3512"/><option value="Deutz 620"/><option value="MTU 4000"/></datalist>
+                                        <datalist id="models"><option value="Caterpillar C32"/><option value="Caterpillar 3512"/><option value="Deutz 620"/><option value="MTU 4000"/><option value="C4.4"/></datalist>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -423,13 +436,12 @@
                                 </div>
                             </div>
 
-                            {/* --- SEÇÃO DE PEÇAS (NOVO) --- */}
+                            {/* --- SEÇÃO DE PEÇAS --- */}
                             <div className="space-y-4">
                                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2">
                                     <Icons.Box size={16}/> Peças e Materiais
                                 </h3>
                                 
-                                {/* Formulario de Adição */}
                                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
                                     <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-200 outline-none" 
                                         placeholder="Nome da Peça / Material"
@@ -450,7 +462,6 @@
                                     </div>
                                 </div>
 
-                                {/* Lista de Peças */}
                                 {formData.parts.length > 0 && (
                                     <div className="space-y-2">
                                         {formData.parts.map(part => (
@@ -532,167 +543,156 @@
                         </div>
                     )}
 
-                    {/* --- LAYOUT DE IMPRESSÃO (ESTILO GOURMET) --- */}
-                    <div className="print-only bg-white text-slate-900 relative">
+                    {/* --- LAYOUT DE IMPRESSÃO --- */}
+                    <div className="print-only print-container bg-white text-slate-900 relative">
                         
                         {/* Header Full-Width */}
-                        <div className="header-strip bg-[#1e293b] text-white p-8 flex justify-between items-center mb-8 shadow-sm print-padding">
-                            <div className="flex items-center gap-4">
-                                <div className="bg-orange-600 text-white w-16 h-16 flex items-center justify-center font-black text-3xl rounded-lg shadow-md">RB</div>
-                                <div>
-                                    <h1 className="text-3xl font-black uppercase tracking-tight text-white leading-none">Retiblocos</h1>
-                                    <p className="text-xs font-bold text-orange-500 uppercase tracking-[0.3em] mt-1">Retífica de Motores</p>
+                        <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
+                            <div className="flex flex-col">
+                                <h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1>
+                                <div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">
+                                    Retífica de Peças e Motores
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Nº Controle</div>
-                                <div className="text-xl font-bold uppercase text-orange-500 leading-tight mb-2 font-mono">{formData.controlNumber || '-----'}</div>
-                                <div className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-wider">Cliente</div>
-                                <div className="text-sm font-bold uppercase text-white leading-tight">{formData.branch.split(' - ')[0]}</div>
+                                <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Nº Controle</div>
+                                <div className="text-xl font-bold uppercase text-orange-600 leading-tight font-mono">{formData.controlNumber || '0000'}</div>
+                                <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div>
+                                <div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
                             </div>
                         </div>
 
-                        <div className="p-10 pt-40"> {/* Padding top aumentado */}
-                            
-                            {/* Status Bar */}
-                            <div className="flex bg-slate-100 rounded-lg p-3 border-l-8 border-orange-600 mb-8 items-center justify-between shadow-sm">
+                        {/* Status Bar */}
+                        <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
+                            <div>
+                                <span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span>
+                                <span className="font-bold text-slate-900 text-sm">{formData.maintenanceType}</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span>
+                                <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-800">
+                                    <span>{formatDate(formData.startDate)} {formData.startTime}</span>
+                                    <span className="text-orange-400">➜</span>
+                                    <span>{formatDate(formData.endDate)} {formData.endTime}</span>
+                                </div>
+                                <div className="text-[9px] font-bold text-orange-600 mt-0.5">Duração: {calculateDuration()}</div>
+                            </div>
+                        </div>
+
+                        {/* Grid de Dados */}
+                        <div className="mb-4">
+                            <div className="grid grid-cols-4 gap-2 text-[10px]">
+                                <div className="p-2 border border-slate-200 rounded bg-slate-50/50">
+                                    <span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Embarcação</span>
+                                    <span className="block font-bold text-slate-900 uppercase">{formData.vesselName}</span>
+                                </div>
+                                <div className="p-2 border border-slate-200 rounded bg-slate-50/50">
+                                    <span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Motor / Modelo</span>
+                                    <span className="block font-bold text-slate-900 uppercase">{formData.engineModel}</span>
+                                </div>
+                                <div className="p-2 border border-slate-200 rounded bg-slate-50/50">
+                                    <span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Posição</span>
+                                    <span className="block font-bold text-slate-900 uppercase">{formData.enginePosition}</span>
+                                </div>
+                                <div className="p-2 border border-slate-200 rounded bg-slate-50/50">
+                                    <span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Horímetro</span>
+                                    <span className="block font-bold text-slate-900 font-mono">{formData.runningHours} H</span>
+                                </div>
+                                <div className="p-2 border border-slate-200 rounded bg-slate-50/50 col-span-4">
+                                    <span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Número de Série</span>
+                                    <span className="block font-bold text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Conteúdo do Relatório */}
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3>
+                                <div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div>
+                            </div>
+
+                            {formData.notes && (
                                 <div>
-                                    <span className="text-[9px] uppercase font-bold text-slate-500 block mb-0.5">Tipo de Serviço</span>
-                                    <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-sm">{formData.maintenanceType}</span>
+                                    <h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações / Pendências</h3>
+                                    <p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p>
                                 </div>
-                                <div className="text-right">
-                                    <span className="text-[9px] uppercase font-bold text-slate-500 block mb-0.5">Período de Execução</span>
-                                    <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-800">
-                                        <span>{formatDate(formData.startDate)} {formData.startTime}</span>
-                                        <span className="text-orange-400">➜</span>
-                                        <span>{formatDate(formData.endDate)} {formData.endTime}</span>
-                                    </div>
-                                    <div className="text-[9px] font-bold text-orange-600 mt-0.5 text-right">Duração: {calculateDuration()}</div>
-                                </div>
-                            </div>
+                            )}
+                        </div>
 
-                            {/* Grid de Dados */}
-                            <div className="mb-8">
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Equipamento</h4>
-                                <div className="grid grid-cols-4 gap-4 bg-white rounded-lg">
-                                    <div className="p-3 border border-slate-200 rounded bg-slate-50/50">
-                                        <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Embarcação</span>
-                                        <span className="block font-bold text-sm text-slate-900 uppercase">{formData.vesselName}</span>
-                                    </div>
-                                    <div className="p-3 border border-slate-200 rounded bg-slate-50/50">
-                                        <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Motor / Modelo</span>
-                                        <span className="block font-bold text-sm text-slate-900 uppercase">{formData.engineModel}</span>
-                                    </div>
-                                    <div className="p-3 border border-slate-200 rounded bg-slate-50/50">
-                                        <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Posição</span>
-                                        <span className="block font-bold text-sm text-slate-900 uppercase">{formData.enginePosition}</span>
-                                    </div>
-                                    <div className="p-3 border border-slate-200 rounded bg-slate-50/50">
-                                        <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Horímetro</span>
-                                        <span className="block font-bold text-sm text-slate-900 font-mono">{formData.runningHours} H</span>
-                                    </div>
-                                    <div className="p-3 border border-slate-200 rounded bg-slate-50/50 col-span-4">
-                                        <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Número de Série</span>
-                                        <span className="block font-bold text-sm text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Conteúdo do Relatório */}
-                            <div className="space-y-6">
-                                <div>
-                                    <h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-3 py-1 mb-2 text-xs tracking-wide bg-orange-50">1. Serviços Executados</h3>
-                                    <div className="text-justify text-xs leading-relaxed whitespace-pre-wrap text-slate-800 pl-4 min-h-[60px]">{formData.tasksExecuted}</div>
-                                </div>
-
-                                {formData.notes && (
-                                    <div>
-                                        <h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-3 py-1 mb-2 text-xs tracking-wide bg-blue-50">2. Observações / Pendências</h3>
-                                        <p className="text-justify text-xs leading-relaxed whitespace-pre-wrap italic text-slate-600 pl-4">{formData.notes}</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* --- TABELA DE PEÇAS NO PDF --- */}
-                            {formData.parts.length > 0 && (
-                                <div className="mt-8">
-                                    <h3 className="font-bold text-slate-900 uppercase border-b-2 border-slate-200 pb-1 mb-4 text-xs">Relação de Peças e Materiais</h3>
-                                    <table className="w-full text-xs border border-slate-200 rounded overflow-hidden">
-                                        <thead className="bg-slate-800 text-white">
-                                            <tr>
-                                                <th className="p-2 text-left w-12 text-center">QTD</th>
-                                                <th className="p-2 text-left">DESCRIÇÃO</th>
-                                                <th className="p-2 text-right">FORNECIMENTO</th>
+                        {/* Tabela de Peças */}
+                        {formData.parts.length > 0 && (
+                            <div className="mt-4 break-inside-avoid">
+                                <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
+                                <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden">
+                                    <thead className="bg-slate-800 text-white">
+                                        <tr>
+                                            <th className="p-1 w-10 text-center">QTD</th>
+                                            <th className="p-1 text-left">DESCRIÇÃO</th>
+                                            <th className="p-1 text-right w-24">FORNECIMENTO</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {formData.parts.map((part, i) => (
+                                            <tr key={part.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                                <td className="p-1 border-b border-slate-100 text-center font-bold">{part.qty}</td>
+                                                <td className="p-1 border-b border-slate-100 font-bold text-slate-700">{part.name}</td>
+                                                <td className="p-1 border-b border-slate-100 text-right">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${part.source === 'Retiblocos' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {part.source}
+                                                    </span>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody>
-                                            {formData.parts.map((part, i) => (
-                                                <tr key={part.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                                    <td className="p-2 border-b border-slate-100 text-center font-bold">{part.qty}</td>
-                                                    <td className="p-2 border-b border-slate-100 font-bold text-slate-700">{part.name}</td>
-                                                    <td className="p-2 border-b border-slate-100 text-right">
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${part.source === 'Retiblocos' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                            {part.source}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-
-                            {/* Galeria de Fotos (Grid Moderno) */}
-                            {formData.photos.length > 0 && (
-                                <div className="mt-8 page-break">
-                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-200 pb-2">Registro Fotográfico</h4>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        {formData.photos.map((photo) => (
-                                            <div key={photo.id} className="break-inside-avoid">
-                                                <div className="border border-slate-200 bg-white p-1 rounded-lg shadow-sm">
-                                                    <div className="h-48 flex items-center justify-center overflow-hidden bg-slate-50 rounded">
-                                                        <img src={photo.url} className="max-h-full max-w-full object-contain" />
-                                                    </div>
-                                                </div>
-                                                {photo.caption && (
-                                                    <div className="mt-2 flex items-start gap-2 px-1">
-                                                        <div className="mt-1 w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0"></div>
-                                                        <p className="text-[10px] font-medium text-slate-600 uppercase leading-tight">{photo.caption}</p>
-                                                    </div>
-                                                )}
-                                            </div>
                                         ))}
-                                    </div>
-                                </div>
-                            )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
 
-                            {/* Rodapé de Assinaturas */}
-                            <div className="mt-auto pt-16 break-inside-avoid">
-                                <div className="flex justify-between items-end gap-10">
-                                    <div className="flex-1 text-center">
-                                        {formData.technicianSignature ? (
-                                            <img src={formData.technicianSignature} className="h-16 mx-auto mb-2 object-contain" />
-                                        ) : <div className="h-16"></div>}
-                                        <div className="border-t-2 border-slate-300 pt-2">
-                                            <p className="font-bold text-xs uppercase text-slate-900">{formData.technicianName}</p>
-                                            <p className="text-[9px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p>
+                        {/* Galeria de Fotos */}
+                        {formData.photos.length > 0 && (
+                            <div className="mt-6">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Registro Fotográfico</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {formData.photos.map((photo) => (
+                                        <div key={photo.id} className="break-inside-avoid border border-slate-200 bg-white p-1 rounded shadow-sm">
+                                            <div className="h-40 flex items-center justify-center overflow-hidden bg-slate-50 rounded mb-1">
+                                                <img src={photo.url} className="max-h-full max-w-full object-contain" />
+                                            </div>
+                                            {photo.caption && <p className="text-[9px] font-bold text-slate-700 text-center uppercase leading-tight">{photo.caption}</p>}
                                         </div>
-                                    </div>
-                                    <div className="flex-1 text-center">
-                                        {formData.clientSignature ? (
-                                            <img src={formData.clientSignature} className="h-16 mx-auto mb-2 object-contain" />
-                                        ) : <div className="h-16"></div>}
-                                        <div className="border-t-2 border-slate-300 pt-2">
-                                            <p className="font-bold text-xs uppercase text-slate-900">Aprovação Cliente</p>
-                                            <p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="text-[8px] text-slate-300 uppercase text-center mt-10 border-t border-slate-100 pt-4 font-mono">
-                                    Documento Digital | Retiblocos Retífica de Motores | {new Date().toLocaleString()}
+                                    ))}
                                 </div>
                             </div>
+                        )}
+
+                        {/* Rodapé de Assinaturas */}
+                        <div className="mt-8 pt-4 border-t-2 border-slate-800 break-inside-avoid">
+                            <div className="grid grid-cols-2 gap-10">
+                                <div className="text-center">
+                                    {formData.technicianSignature ? (
+                                        <img src={formData.technicianSignature} className="h-10 mx-auto mb-1 object-contain" />
+                                    ) : <div className="h-10"></div>}
+                                    <div className="border-t border-slate-400 pt-1">
+                                        <p className="font-bold text-[10px] uppercase text-slate-900">{formData.technicianName}</p>
+                                        <p className="text-[8px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p>
+                                    </div>
+                                </div>
+                                <div className="text-center">
+                                    {formData.clientSignature ? (
+                                        <img src={formData.clientSignature} className="h-10 mx-auto mb-1 object-contain" />
+                                    ) : <div className="h-10"></div>}
+                                    <div className="border-t border-slate-400 pt-1">
+                                        <p className="font-bold text-[10px] uppercase text-slate-900">Aprovação Cliente</p>
+                                        <p className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">
+                                Retiblocos Retífica de Motores - Documento Digital - {new Date().toLocaleDateString()}
+                            </div>
                         </div>
+
                     </div>
                 </div>
             );
