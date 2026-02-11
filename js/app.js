@@ -20,8 +20,9 @@ const db = getFirestore(app);
 const appId = 'retiblocos-v1';
 
 // --- UTILITÁRIOS ---
-// Função para comprimir imagem antes de salvar
-const compressImage = (file, quality = 0.6, maxWidth = 800) => {
+// Função de Compressão AGRESSIVA para evitar erro no Firestore
+// Reduzi max width para 600px e quality para 0.5
+const compressImage = (file, quality = 0.5, maxWidth = 600) => {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -33,6 +34,7 @@ const compressImage = (file, quality = 0.6, maxWidth = 800) => {
                 let width = img.width;
                 let height = img.height;
 
+                // Redimensionamento proporcional
                 if (width > maxWidth) {
                     height *= maxWidth / width;
                     width = maxWidth;
@@ -42,6 +44,7 @@ const compressImage = (file, quality = 0.6, maxWidth = 800) => {
                 elem.height = height;
                 const ctx = elem.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
+                // Converte para JPEG com qualidade reduzida
                 resolve(elem.toDataURL('image/jpeg', quality));
             };
         };
@@ -168,21 +171,26 @@ function App() {
         try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', id)); } catch (e) { alert("Erro ao excluir."); }
     };
 
-    // FUNÇÃO PRINCIPAL DE SALVAMENTO (Agora aceita dados diretos para auto-save)
+    // FUNÇÃO PRINCIPAL DE SALVAMENTO (Retorna sucesso ou falha)
     const saveToCloud = async (dataToSave = null, silent = false) => {
-        if (!user) return alert("Conectando...");
+        if (!user) {
+            alert("Aguarde a conexão com a nuvem...");
+            return false;
+        }
         if (!silent) setIsSaving(true);
         
         const payload = dataToSave || formData;
 
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
+            
             // Verificação de segurança de tamanho
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
+            // 950KB margem de segurança (1MB limite)
             if (jsonSize > 950000) { 
-                alert("ATENÇÃO: Relatório muito pesado! O limite do banco gratuito é 1MB. Tente remover algumas fotos."); 
-                setIsSaving(false); 
-                return; 
+                alert(`ERRO AO SALVAR: O arquivo ficou muito pesado (${(jsonSize/1024).toFixed(0)}KB). O limite é 1MB. Por favor, remova uma ou duas fotos e tente novamente.`); 
+                if(!silent) setIsSaving(false); 
+                return false; // Retorna falha
             }
 
             if (payload.id) {
@@ -192,9 +200,11 @@ function App() {
                 setFormData(prev => ({ ...prev, id: ref.id }));
             }
             if(!silent) alert("Salvo com sucesso!");
+            return true; // Retorna sucesso
         } catch (e) { 
             console.error(e); 
-            alert("Erro ao salvar na nuvem. Verifique a internet."); 
+            alert("Erro de conexão ao salvar."); 
+            return false;
         } finally { 
             if(!silent) setIsSaving(false); 
         }
@@ -207,15 +217,15 @@ function App() {
             const remainingSlots = MAX_PHOTOS - formData.photos.length;
             
             if (remainingSlots <= 0) {
-                alert(`Limite de ${MAX_PHOTOS} fotos atingido! Remova algumas antes de adicionar.`);
+                alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
                 return;
             }
 
             const filesToProcess = files.slice(0, remainingSlots);
             
-            // Processa compressão
+            // Processa compressão AGRESSIVA
             const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
-                const compressedUrl = await compressImage(file);
+                const compressedUrl = await compressImage(file, 0.5, 600); // 0.5 qualidade, 600px max
                 return { id: Date.now() + Math.random(), url: compressedUrl, caption: '' };
             }));
 
@@ -231,15 +241,34 @@ function App() {
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
     
-    // Fluxo de Assinatura com Auto-Save
+    // Fluxo de Assinatura
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
     
-    // Assinatura Final dispara salvamento automático
+    // Assinatura Final dispara salvamento automático COM verificação
     const finalizeReport = async (clientSig) => {
         const finalData = { ...formData, clientSignature: clientSig };
+        
+        // Verifica tamanho ANTES de mudar de tela
+        const jsonSize = new Blob([JSON.stringify(finalData)]).size;
+        
+        if (jsonSize > 950000) {
+             alert(`ATENÇÃO: Não foi possível finalizar. O relatório está com ${(jsonSize/1024).toFixed(0)}KB (Limite 950KB). \n\nPor favor, volte e exclua 1 ou 2 fotos.`);
+             // Não muda a view, mantém o usuário na tela de assinatura para ele poder cancelar e voltar
+             return;
+        }
+
         setFormData(finalData);
-        setView('preview');
-        await saveToCloud(finalData, true); // Auto-save silencioso
+        // Tenta salvar
+        const saved = await saveToCloud(finalData, true); // Silent save
+        
+        if (saved) {
+            setView('preview');
+        } else {
+            // Se falhar o salvamento (ex: sem internet), avisa mas permite o preview local
+            if(confirm("Não foi possível salvar na nuvem (sem internet?), mas você pode gerar o PDF localmente. Deseja prosseguir para o PDF?")) {
+                setView('preview');
+            }
+        }
     };
 
     const saveClientSig = (d) => finalizeReport(d);
