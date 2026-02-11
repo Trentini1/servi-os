@@ -427,7 +427,7 @@ function App() {
 
             {/* VISTA 1: DASHBOARD */}
             {view === 'dashboard' && (
-                <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
+                <div key="dashboard" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex justify-between items-center py-4">
                         <div><h1 className="text-2xl font-black text-white uppercase tracking-tight">Painel de Controle</h1><p className="text-slate-400 text-sm">Bem-vindo ao sistema Retiblocos</p></div>
                         <div className="bg-orange-600 w-10 h-10 rounded-lg flex items-center justify-center font-black text-white">RB</div>
@@ -494,7 +494,7 @@ function App() {
 
             {/* VISTA 2: CALENDÁRIO */}
             {view === 'calendar' && (
-                <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
+                <div key="calendar" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex items-center gap-4 mb-4">
                         <button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button>
                         <h1 className="text-xl font-bold text-white">Agenda de Serviços</h1>
@@ -533,7 +533,7 @@ function App() {
 
             {/* FORMULÁRIO */}
             {view === 'form' && (
-                <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
+                <div key="form" className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                      <div className="space-y-4">
                         <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Informações</h3>
                         <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 text-orange-400 font-bold uppercase" placeholder="Nº Controle (EX: 1442)" value={formData.controlNumber} onChange={e => setFormData({...formData, controlNumber: e.target.value})} />
@@ -703,7 +703,7 @@ function App() {
 
             {/* PREVIEW FINAL */}
             {view === 'preview' && (
-                <div className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
+                <div key="preview" className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
                     <div><h2 className="text-2xl font-bold text-white mb-1">Salvo e Sincronizado!</h2><p className="text-slate-400 text-sm">O relatório já está na nuvem.</p></div>
                     <div className="w-full space-y-3">
