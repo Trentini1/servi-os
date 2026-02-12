@@ -423,6 +423,12 @@ function App() {
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
+    // AQUI ESTÁ A CORREÇÃO:
+    const filteredReports = reports.filter(r => 
+        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     return (
         <div className="min-h-screen">
             
