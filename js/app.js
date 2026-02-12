@@ -45,7 +45,8 @@ const Icons = {
     ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />,
     Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
     Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
-    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />
+    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
+    Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />
 };
 
 // 3. DADOS ESTÁTICOS
@@ -232,6 +233,7 @@ function App() {
     const [schedules, setSchedules] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false); // Novo estado para feedback de impressão
     
     // Estado para Agendamento e Modal de Dia
     const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
@@ -267,7 +269,8 @@ function App() {
             // Formato: RB - NOME_DA_EMBARCACAO - POSICAO - DATA
             const vessel = formData.vesselName.toUpperCase();
             const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-            const date = formData.startDate;
+            // Data formatada para nome de arquivo seguro: DIA-MES-ANO
+            const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
             document.title = `RB - ${vessel} - ${pos} - ${date}`;
         } else {
             document.title = "Retiblocos System";
@@ -356,18 +359,23 @@ function App() {
         setView('preview');
     };
 
-    // FUNÇÃO DE IMPRESSÃO (SAFARI SAFE)
+    // FUNÇÃO DE IMPRESSÃO (SAFARI SAFE - OTIMIZADA PARA IOS)
     const handlePrint = () => {
-        // Força a atualização do título antes de imprimir
+        setIsPrinting(true); // 1. Mostra "Preparando..." imediatamente
+        
+        // 2. Força a atualização do título do documento (Nome do Arquivo)
         const vessel = formData.vesselName ? formData.vesselName.toUpperCase() : 'RELATORIO';
-        const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : '';
-        const date = formData.startDate || new Date().toISOString().split('T')[0];
+        const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
+        // Formato seguro DD-MM-AAAA
+        const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
         document.title = `RB - ${vessel} - ${pos} - ${date}`;
         
-        // Pequeno delay para garantir que o navegador processou o título
+        // 3. Delay generoso para o Safari iOS renderizar a UI de "Preparando" e atualizar o título
+        // antes de congelar a thread principal para gerar o PDF.
         setTimeout(() => {
             window.print();
-        }, 100);
+            setIsPrinting(false); // Volta o botão ao normal (pode não aparecer até fechar o modal)
+        }, 500); 
     };
 
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
@@ -444,7 +452,7 @@ function App() {
     
     const shareData = async () => {
         const dataStr = JSON.stringify(formData, null, 2);
-        // Formato Seguro para Nome de Arquivo
+        // Formato Seguro para Nome de Arquivo (Backup JSON)
         const safe = (t) => t ? t.replace(/[^a-z0-9]/gi, '_').toUpperCase() : 'X';
         const fileName = `RB_${safe(formData.vesselName)}_${safe(formData.enginePosition)}_${formData.startDate}.json`;
         
@@ -756,7 +764,13 @@ function App() {
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
                     <div><h2 className="text-2xl font-bold text-white mb-1">Pronto para Imprimir</h2><p className="text-slate-400 text-sm">Clique abaixo para gerar o PDF.</p></div>
                     <div className="w-full space-y-3">
-                        <button onClick={handlePrint} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Printer size={20}/> Gerar PDF / Imprimir</button>
+                        <button 
+                            onClick={handlePrint} 
+                            disabled={isPrinting}
+                            className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 active:border-0 active:translate-y-1 transition-all ${isPrinting ? 'bg-purple-600 text-white border-purple-800 cursor-wait' : 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'}`}
+                        >
+                            {isPrinting ? <><Icons.Spinner size={20}/> ⌛ Preparando PDF...</> : <><Icons.Printer size={20}/> Gerar PDF / Imprimir</>}
+                        </button>
                         <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Backup de Dados (JSON)</button>
                     </div>
                     <div className="flex gap-4 w-full pt-4">
