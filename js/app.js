@@ -45,8 +45,7 @@ const Icons = {
     ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />,
     Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
     Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
-    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
-    Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />
+    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />
 };
 
 // 3. DADOS ESTÁTICOS
@@ -233,7 +232,6 @@ function App() {
     const [schedules, setSchedules] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [isPrinting, setIsPrinting] = useState(false); // Novo estado para feedback de impressão
     
     // Estado para Agendamento e Modal de Dia
     const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
@@ -266,10 +264,8 @@ function App() {
     // FORMATAR NOME DO ARQUIVO/PÁGINA (Fundamental para o PDF sair com nome certo)
     useEffect(() => {
         if (formData.vesselName) {
-            // Formato: RB - NOME_DA_EMBARCACAO - POSICAO - DATA
             const vessel = formData.vesselName.toUpperCase();
             const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-            // Data formatada para nome de arquivo seguro: DIA-MES-ANO
             const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
             document.title = `RB - ${vessel} - ${pos} - ${date}`;
         } else {
@@ -355,29 +351,23 @@ function App() {
     // Função para ir direto ao preview para imprimir
     const openPreview = (e, report) => {
         if(e) e.stopPropagation();
+        
+        // 1. Define os dados (renderiza o layout print-only)
         setFormData(report);
+        
+        // 2. Define o Título IMEDIATAMENTE (para o iOS pegar o nome certo no "Salvar")
+        const vessel = report.vesselName ? report.vesselName.toUpperCase() : 'RELATORIO';
+        const pos = report.enginePosition ? report.enginePosition.toUpperCase() : 'GERAL';
+        const date = report.startDate ? report.startDate.split('-').reverse().join('-') : 'DATA';
+        document.title = `RB - ${vessel} - ${pos} - ${date}`;
+
         setView('preview');
     };
 
-    // FUNÇÃO DE IMPRESSÃO (SAFARI SAFE - OTIMIZADA PARA PWA/IOS)
+    // FUNÇÃO DE IMPRESSÃO (SAFARI PWA SAFE)
     const handlePrint = () => {
-        // 1. Atualiza título imediatamente (Garante nome do arquivo)
-        const vessel = formData.vesselName ? formData.vesselName.toUpperCase() : 'RELATORIO';
-        const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-        const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
-        const safeTitle = `RB - ${vessel} - ${pos} - ${date}`;
-        document.title = safeTitle;
-
-        // 2. Feedback visual rápido e Impressão
-        setIsPrinting(true);
-        
-        // Timeout minúsculo (10ms) apenas para permitir que o React renderize o estado "Preparando..."
-        // antes de bloquear a thread com window.print(). 
-        // 500ms era muito e bloqueava o PWA. 10-50ms é seguro.
-        setTimeout(() => {
-            window.print();
-            setIsPrinting(false);
-        }, 10);
+        // Sem delay, sem estados intermediários. Direto ao ponto para não ser bloqueado.
+        window.print();
     };
 
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
@@ -768,10 +758,9 @@ function App() {
                     <div className="w-full space-y-3">
                         <button 
                             onClick={handlePrint} 
-                            disabled={isPrinting}
-                            className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 active:border-0 active:translate-y-1 transition-all ${isPrinting ? 'bg-purple-600 text-white border-purple-800 cursor-wait' : 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'}`}
+                            className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"
                         >
-                            {isPrinting ? <><Icons.Spinner size={20}/> ⌛ Preparando PDF...</> : <><Icons.Printer size={20}/> Gerar PDF / Imprimir</>}
+                            <Icons.Printer size={20}/> Gerar PDF / Imprimir
                         </button>
                         <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Backup de Dados (JSON)</button>
                     </div>
@@ -806,14 +795,14 @@ function App() {
                 </div>
 
                 <div className="space-y-4">
-                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div></div>
-                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
+                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-900 pl-3">{formData.tasksExecuted}</div></div>
+                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-700 pl-3">{formData.notes}</p></div>)}
                 </div>
 
                 {formData.parts.length > 0 && (
                     <div className="mt-4 break-inside-avoid">
                         <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
-                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
+                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold text-slate-900">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
                     </div>
                 )}
 
