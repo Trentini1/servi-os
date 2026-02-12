@@ -2,7 +2,7 @@
 
 const { useState, useEffect, useRef, useMemo } = React;
 
-// 1. CONFIGURAÇÃO FIREBASE (Mantenha igual, funciona com seu HTML)
+// 1. CONFIGURAÇÃO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -44,7 +44,8 @@ const Icons = {
     ChevronLeft: (props) => <Icon {...props} path={<><path d="m15 18-6-6 6-6"/></>} />,
     ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />,
     Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
-    Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />
+    Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
+    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />
 };
 
 // 3. DADOS ESTÁTICOS
@@ -334,6 +335,14 @@ function App() {
     // --- LÓGICA DE RELATÓRIOS ---
 
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
+    
+    // NOVO: Função para ir direto ao preview para imprimir
+    const openPreview = (e, report) => {
+        if(e) e.stopPropagation();
+        setFormData(report);
+        setView('preview');
+    };
+
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
     const deleteReport = async (e, id) => {
         if(e) e.stopPropagation();
@@ -414,11 +423,6 @@ function App() {
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
-    const filteredReports = reports.filter(r => 
-        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
     return (
         <div className="min-h-screen">
             
@@ -481,7 +485,17 @@ function App() {
                                         </div>
                                         
                                         <div className="flex gap-2 mt-3">
-                                            <button onClick={(e) => editReport(e, rep)} className="flex-1 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 text-xs font-bold flex items-center justify-center gap-1"><Icons.Pen size={12}/> Abrir</button>
+                                            {/* BOTÃO ESPECIAL PARA RELATÓRIOS ASSINADOS: VAI DIRETO PRO PDF */}
+                                            {isSigned && (
+                                                <button onClick={(e) => openPreview(e, rep)} className="flex-1 py-1.5 bg-purple-600/10 text-purple-400 rounded-lg hover:bg-purple-600/20 text-xs font-bold flex items-center justify-center gap-1">
+                                                    <Icons.Printer size={14}/> PDF
+                                                </button>
+                                            )}
+                                            
+                                            <button onClick={(e) => editReport(e, rep)} className="flex-1 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 text-xs font-bold flex items-center justify-center gap-1">
+                                                <Icons.Pen size={12}/> {isSigned ? 'Ver' : 'Editar'}
+                                            </button>
+                                            
                                             <button onClick={(e) => deleteReport(e, rep.id)} className="w-10 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600/20 flex items-center justify-center"><Icons.Trash size={14}/></button>
                                         </div>
                                     </div>
@@ -679,7 +693,7 @@ function App() {
                                                 <button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button>
                                             </>
                                         ) : (
-                                            <button onClick={() => { setSelectedDateEvents(null); editReport(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>
+                                            <button onClick={() => { setSelectedDateEvents(null); openPreview(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>
                                         )}
                                     </div>
                                 </div>
@@ -705,10 +719,10 @@ function App() {
             {view === 'preview' && (
                 <div key="preview" className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
-                    <div><h2 className="text-2xl font-bold text-white mb-1">Salvo e Sincronizado!</h2><p className="text-slate-400 text-sm">O relatório já está na nuvem.</p></div>
+                    <div><h2 className="text-2xl font-bold text-white mb-1">Pronto para Imprimir</h2><p className="text-slate-400 text-sm">Clique abaixo para gerar o PDF.</p></div>
                     <div className="w-full space-y-3">
-                        <button onClick={() => window.print()} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Save size={20}/> Baixar PDF</button>
-                        <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Compartilhar Dados</button>
+                        <button onClick={() => window.print()} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Printer size={20}/> Gerar PDF / Imprimir</button>
+                        <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Backup de Dados (JSON)</button>
                     </div>
                     <div className="flex gap-4 w-full pt-4">
                         <button onClick={startNewReport} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Novo Relatório</button>
