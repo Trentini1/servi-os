@@ -359,23 +359,25 @@ function App() {
         setView('preview');
     };
 
-    // FUNÇÃO DE IMPRESSÃO (SAFARI SAFE - OTIMIZADA PARA IOS)
+    // FUNÇÃO DE IMPRESSÃO (SAFARI SAFE - OTIMIZADA PARA PWA/IOS)
     const handlePrint = () => {
-        setIsPrinting(true); // 1. Mostra "Preparando..." imediatamente
-        
-        // 2. Força a atualização do título do documento (Nome do Arquivo)
+        // 1. Atualiza título imediatamente (Garante nome do arquivo)
         const vessel = formData.vesselName ? formData.vesselName.toUpperCase() : 'RELATORIO';
         const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-        // Formato seguro DD-MM-AAAA
         const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
-        document.title = `RB - ${vessel} - ${pos} - ${date}`;
+        const safeTitle = `RB - ${vessel} - ${pos} - ${date}`;
+        document.title = safeTitle;
+
+        // 2. Feedback visual rápido e Impressão
+        setIsPrinting(true);
         
-        // 3. Delay generoso para o Safari iOS renderizar a UI de "Preparando" e atualizar o título
-        // antes de congelar a thread principal para gerar o PDF.
+        // Timeout minúsculo (10ms) apenas para permitir que o React renderize o estado "Preparando..."
+        // antes de bloquear a thread com window.print(). 
+        // 500ms era muito e bloqueava o PWA. 10-50ms é seguro.
         setTimeout(() => {
             window.print();
-            setIsPrinting(false); // Volta o botão ao normal (pode não aparecer até fechar o modal)
-        }, 500); 
+            setIsPrinting(false);
+        }, 10);
     };
 
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
