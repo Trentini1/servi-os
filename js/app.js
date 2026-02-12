@@ -261,6 +261,19 @@ function App() {
         }
     }, []);
 
+    // FORMATAR NOME DO ARQUIVO/PÁGINA (Fundamental para o PDF sair com nome certo)
+    useEffect(() => {
+        if (formData.vesselName) {
+            // Formato: RB - NOME_DA_EMBARCACAO - POSICAO - DATA
+            const vessel = formData.vesselName.toUpperCase();
+            const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
+            const date = formData.startDate;
+            document.title = `RB - ${vessel} - ${pos} - ${date}`;
+        } else {
+            document.title = "Retiblocos System";
+        }
+    }, [formData]);
+
     // AUTH
     useEffect(() => {
         if(!auth) return;
@@ -336,11 +349,25 @@ function App() {
 
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
     
-    // NOVO: Função para ir direto ao preview para imprimir
+    // Função para ir direto ao preview para imprimir
     const openPreview = (e, report) => {
         if(e) e.stopPropagation();
         setFormData(report);
         setView('preview');
+    };
+
+    // FUNÇÃO DE IMPRESSÃO (SAFARI SAFE)
+    const handlePrint = () => {
+        // Força a atualização do título antes de imprimir
+        const vessel = formData.vesselName ? formData.vesselName.toUpperCase() : 'RELATORIO';
+        const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : '';
+        const date = formData.startDate || new Date().toISOString().split('T')[0];
+        document.title = `RB - ${vessel} - ${pos} - ${date}`;
+        
+        // Pequeno delay para garantir que o navegador processou o título
+        setTimeout(() => {
+            window.print();
+        }, 100);
     };
 
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
@@ -417,13 +444,15 @@ function App() {
     
     const shareData = async () => {
         const dataStr = JSON.stringify(formData, null, 2);
-        const fileName = `RB_${formData.vesselName}.json`;
+        // Formato Seguro para Nome de Arquivo
+        const safe = (t) => t ? t.replace(/[^a-z0-9]/gi, '_').toUpperCase() : 'X';
+        const fileName = `RB_${safe(formData.vesselName)}_${safe(formData.enginePosition)}_${formData.startDate}.json`;
+        
         const file = new File([dataStr], fileName, { type: 'application/json' });
         if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
-    // AQUI ESTÁ A CORREÇÃO:
     const filteredReports = reports.filter(r => 
         (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -727,7 +756,7 @@ function App() {
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
                     <div><h2 className="text-2xl font-bold text-white mb-1">Pronto para Imprimir</h2><p className="text-slate-400 text-sm">Clique abaixo para gerar o PDF.</p></div>
                     <div className="w-full space-y-3">
-                        <button onClick={() => window.print()} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Printer size={20}/> Gerar PDF / Imprimir</button>
+                        <button onClick={handlePrint} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Printer size={20}/> Gerar PDF / Imprimir</button>
                         <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Backup de Dados (JSON)</button>
                     </div>
                     <div className="flex gap-4 w-full pt-4">
