@@ -18,7 +18,8 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 }
 const auth = firebase ? firebase.auth() : null;
 const db = firebase ? firebase.firestore() : null;
-const storage = firebase ? firebase.storage() : null; // Inicializa o Storage
+// CORREÇÃO AQUI: Verifica se a função existe antes de chamar, evitando o crash fatal
+const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
 // 2. ÍCONES (SVG)
