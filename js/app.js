@@ -7,7 +7,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
   projectId: "retiblocos-app",
-  storageBucket: "retiblocos-app.firebasestorage.app",
+  storageBucket: "retiblocos-app.firebasestorage.app", // Seu bucket pago
   messagingSenderId: "509287186524",
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
@@ -18,6 +18,7 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 }
 const auth = firebase ? firebase.auth() : null;
 const db = firebase ? firebase.firestore() : null;
+const storage = firebase ? firebase.storage() : null; // Inicializa o Storage
 const appId = 'retiblocos-v1';
 
 // 2. ÍCONES (SVG)
@@ -45,7 +46,8 @@ const Icons = {
     ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />,
     Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
     Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
-    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />
+    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
+    Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />
 };
 
 // 3. DADOS ESTÁTICOS
@@ -53,10 +55,18 @@ const SAAM_BRANCHES = [ "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Br
 const MAINTENANCE_TYPES = [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ];
 const ENGINE_POSITIONS = [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ];
 const PART_SOURCES = ["Retiblocos", "Cliente"];
-const MAX_PHOTOS = 6;
+const MAX_PHOTOS = 12; // Aumentado já que agora temos Storage
 
 // 4. UTILITÁRIOS
-const compressImage = (file, quality = 0.5, maxWidth = 600) => {
+// Helper: Converte Data URL para Blob (necessário para o Storage)
+const dataURLtoBlob = (dataurl) => {
+    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+    return new Blob([u8arr], {type:mime});
+};
+
+const compressImage = (file, quality = 0.6, maxWidth = 800) => {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -232,11 +242,13 @@ function App() {
     const [schedules, setSchedules] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [isUploading, setIsUploading] = useState(false); // NOVO: Estado de Upload
     
     // Estado para Agendamento e Modal de Dia
     const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
-    const [selectedDateEvents, setSelectedDateEvents] = useState(null); // { date: '...', events: [] }
+    const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
 
     // Estado do Formulário
     const initialFormState = {
@@ -261,7 +273,7 @@ function App() {
         }
     }, []);
 
-    // FORMATAR NOME DO ARQUIVO/PÁGINA (Fundamental para o PDF sair com nome certo)
+    // FORMATAR NOME DO ARQUIVO/PÁGINA
     useEffect(() => {
         if (formData.vesselName) {
             const vessel = formData.vesselName.toUpperCase();
@@ -351,23 +363,23 @@ function App() {
     // Função para ir direto ao preview para imprimir
     const openPreview = (e, report) => {
         if(e) e.stopPropagation();
-        
-        // 1. Define os dados (renderiza o layout print-only)
         setFormData(report);
-        
-        // 2. Define o Título IMEDIATAMENTE (para o iOS pegar o nome certo no "Salvar")
-        const vessel = report.vesselName ? report.vesselName.toUpperCase() : 'RELATORIO';
-        const pos = report.enginePosition ? report.enginePosition.toUpperCase() : 'GERAL';
-        const date = report.startDate ? report.startDate.split('-').reverse().join('-') : 'DATA';
-        document.title = `RB - ${vessel} - ${pos} - ${date}`;
-
         setView('preview');
     };
 
     // FUNÇÃO DE IMPRESSÃO (SAFARI PWA SAFE)
     const handlePrint = () => {
-        // Sem delay, sem estados intermediários. Direto ao ponto para não ser bloqueado.
-        window.print();
+        const vessel = formData.vesselName ? formData.vesselName.toUpperCase() : 'RELATORIO';
+        const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
+        const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
+        const safeTitle = `RB - ${vessel} - ${pos} - ${date}`;
+        document.title = safeTitle;
+
+        setIsPrinting(true);
+        setTimeout(() => {
+            window.print();
+            setIsPrinting(false);
+        }, 10);
     };
 
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
@@ -383,9 +395,11 @@ function App() {
         const payload = dataToSave || formData;
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
+            // A verificação de tamanho pode ser relaxada agora que as imagens são links,
+            // mas mantemos um limite seguro para o texto.
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
             if (jsonSize > 950000) { 
-                alert(`ERRO: Relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). Limite 1MB.`); 
+                alert(`ERRO: Texto do relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). Tente reduzir a descrição.`); 
                 if(!silent) setIsSaving(false); return false; 
             }
             
@@ -402,18 +416,48 @@ function App() {
         finally { if(!silent) setIsSaving(false); }
     };
 
+    // --- LÓGICA DE UPLOAD PARA O STORAGE ---
     const handlePhotoUpload = async (e) => {
+        if (!storage) return alert("ERRO: Storage não configurado. Verifique se importou o script no HTML.");
+        
         if (e.target.files) {
             const files = Array.from(e.target.files);
             const remainingSlots = MAX_PHOTOS - formData.photos.length;
             if (remainingSlots <= 0) return alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
             
             const filesToProcess = files.slice(0, remainingSlots);
-            const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
-                const compressedUrl = await compressImage(file, 0.5, 600);
-                return { id: Date.now() + Math.random(), url: compressedUrl, caption: '' };
-            }));
-            setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
+            
+            setIsUploading(true); // Bloqueia UI
+            
+            try {
+                const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
+                    // 1. Comprimir (gera Base64)
+                    const compressedDataUrl = await compressImage(file, 0.6, 800);
+                    
+                    // 2. Converter para Blob
+                    const blob = dataURLtoBlob(compressedDataUrl);
+                    
+                    // 3. Criar Referência no Storage
+                    // Caminho: imagens/TIMESTAMP_RANDOM.jpg
+                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                    const storageRef = storage.ref().child(`images/${fileName}`);
+                    
+                    // 4. Upload
+                    await storageRef.put(blob);
+                    
+                    // 5. Pegar URL Pública
+                    const downloadUrl = await storageRef.getDownloadURL();
+                    
+                    return { id: Date.now() + Math.random(), url: downloadUrl, caption: '' };
+                }));
+                
+                setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
+            } catch (error) {
+                console.error("Erro no upload:", error);
+                alert("Erro ao enviar imagem. Verifique a conexão.");
+            } finally {
+                setIsUploading(false); // Libera UI
+            }
         }
     };
 
@@ -573,7 +617,7 @@ function App() {
                         <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><Icons.Home size={18} /><span className="text-xs font-bold uppercase hidden sm:inline">Início</span></button>
                         <div className="flex items-center gap-2"><div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div><span className="font-bold text-sm text-white uppercase tracking-wider">{view === 'preview' ? 'Finalizado' : 'Edição'}</span></div>
                         <div className="flex gap-2">
-                            {view === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"><Icons.Save size={18}/></button>}
+                            {view === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving || isUploading} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"><Icons.Save size={18}/></button>}
                             {view === 'preview' && <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200">Editar</button>}
                         </div>
                     </div>
@@ -643,10 +687,18 @@ function App() {
                                     <input type="text" placeholder="Legenda..." className="w-full bg-slate-900 text-[10px] p-2 text-slate-300 outline-none border-t border-slate-700" value={photo.caption} onChange={e => updateCaption(photo.id, e.target.value)} />
                                 </div>
                             ))}
-                            <label className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${formData.photos.length >= MAX_PHOTOS ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500'}`}>
-                                <Icons.Plus size={24} /><span className="text-xs mt-2 font-bold">Add Foto</span>
-                                <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={formData.photos.length >= MAX_PHOTOS}/>
-                            </label>
+                            
+                            {isUploading ? (
+                                <div className="h-32 border-2 border-dashed border-orange-500/50 bg-slate-800 rounded-lg flex flex-col items-center justify-center text-orange-500 animate-pulse">
+                                    <Icons.Spinner size={24}/>
+                                    <span className="text-xs mt-2 font-bold uppercase">Enviando...</span>
+                                </div>
+                            ) : (
+                                <label className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${formData.photos.length >= MAX_PHOTOS ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500'}`}>
+                                    <Icons.Plus size={24} /><span className="text-xs mt-2 font-bold">Add Foto</span>
+                                    <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={formData.photos.length >= MAX_PHOTOS}/>
+                                </label>
+                            )}
                         </div>
                     </div>
 
@@ -670,8 +722,8 @@ function App() {
                                     </button>
                                 </div>
                             ) : (
-                                <button disabled={!isFormValid()} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
-                                    <Icons.Pen size={20} /> Assinar e Finalizar
+                                <button disabled={!isFormValid() || isUploading} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() && !isUploading ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
+                                    {isUploading ? <><Icons.Spinner/> Aguarde o Upload...</> : <><Icons.Pen size={20} /> Assinar e Finalizar</>}
                                 </button>
                             )}
                         </div>
@@ -758,9 +810,10 @@ function App() {
                     <div className="w-full space-y-3">
                         <button 
                             onClick={handlePrint} 
-                            className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"
+                            disabled={isPrinting}
+                            className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 active:border-0 active:translate-y-1 transition-all ${isPrinting ? 'bg-purple-600 text-white border-purple-800 cursor-wait' : 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'}`}
                         >
-                            <Icons.Printer size={20}/> Gerar PDF / Imprimir
+                            {isPrinting ? <><Icons.Spinner size={20}/> ⌛ Preparando PDF...</> : <><Icons.Printer size={20}/> Gerar PDF / Imprimir</>}
                         </button>
                         <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Backup de Dados (JSON)</button>
                     </div>
@@ -795,14 +848,14 @@ function App() {
                 </div>
 
                 <div className="space-y-4">
-                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-900 pl-3">{formData.tasksExecuted}</div></div>
-                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-700 pl-3">{formData.notes}</p></div>)}
+                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div></div>
+                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
                 </div>
 
                 {formData.parts.length > 0 && (
                     <div className="mt-4 break-inside-avoid">
                         <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
-                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold text-slate-900">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
+                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
                     </div>
                 )}
 
