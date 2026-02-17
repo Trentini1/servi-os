@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) ---
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V2.2
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -18,7 +18,7 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 }
 const auth = firebase ? firebase.auth() : null;
 const db = firebase ? firebase.firestore() : null;
-// CORREÇÃO AQUI: Verifica se a função existe antes de chamar, evitando o crash fatal
+// Verifica se a função existe antes de chamar, evitando o crash fatal se o script faltar
 const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
@@ -56,10 +56,9 @@ const SAAM_BRANCHES = [ "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Br
 const MAINTENANCE_TYPES = [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ];
 const ENGINE_POSITIONS = [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ];
 const PART_SOURCES = ["Retiblocos", "Cliente"];
-const MAX_PHOTOS = 12; // Aumentado já que agora temos Storage
+const MAX_PHOTOS = 12;
 
 // 4. UTILITÁRIOS
-// Helper: Converte Data URL para Blob (necessário para o Storage)
 const dataURLtoBlob = (dataurl) => {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
         bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
@@ -88,20 +87,12 @@ const compressImage = (file, quality = 0.6, maxWidth = 800) => {
     });
 };
 
-// --- COMPONENTE: INTRODUÇÃO (Animação) ---
+// --- COMPONENTE: INTRODUÇÃO ---
 const IntroAnimation = ({ onFinish }) => {
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            onFinish();
-        }, 2500); 
-        return () => clearTimeout(timer);
-    }, []);
-
+    useEffect(() => { const t = setTimeout(() => onFinish(), 2500); return () => clearTimeout(t); }, []);
     return (
         <div className="intro-overlay">
-            <div className="intro-logo-container">
-                <div className="intro-rb">RB</div>
-            </div>
+            <div className="intro-logo-container"><div className="intro-rb">RB</div></div>
             <h1 className="intro-text">Retiblocos</h1>
             <p className="intro-sub">SISTEMA DE GESTÃO TÉCNICA</p>
         </div>
@@ -147,62 +138,33 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
     );
 };
 
-// --- COMPONENTE: CALENDÁRIO OTIMIZADO ---
+// --- COMPONENTE: CALENDÁRIO ---
 const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
-    
-    // Mescla Relatórios (Verde) e Agendamentos (Laranja)
     const events = useMemo(() => {
         const all = [];
-        // Relatórios (Já feitos)
-        reports.forEach(r => {
-            if(r.startDate) all.push({ 
-                date: r.startDate, 
-                title: r.vesselName, 
-                time: `${r.startTime || '08:00'} - ${r.endTime || '18:00'}`,
-                type: 'report', 
-                id: r.id,
-                data: r
-            });
-        });
-        // Agendamentos (Futuros)
-        schedules.forEach(s => {
-            if(s.date) all.push({ 
-                date: s.date, 
-                title: s.vesselName, 
-                time: 'Previsão',
-                type: 'schedule', 
-                id: s.id, 
-                ...s 
-            });
-        });
+        reports.forEach(r => { if(r.startDate) all.push({ date: r.startDate, title: r.vesselName, time: `${r.startTime||'08:00'}-${r.endTime||'18:00'}`, type: 'report', id: r.id, data: r }); });
+        schedules.forEach(s => { if(s.date) all.push({ date: s.date, title: s.vesselName, time: 'Previsão', type: 'schedule', id: s.id, ...s }); });
         return all;
     }, [reports, schedules]);
 
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
     const monthName = currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-
     const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
     const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
     const renderDays = () => {
         const days = [];
         for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="calendar-day bg-slate-800/30"></div>);
-        
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const dayEvents = events.filter(e => e.date === dateStr);
-            
             days.push(
                 <div key={day} onClick={() => onDateClick(dateStr, dayEvents)} className="calendar-day cursor-pointer hover:bg-slate-700 transition-colors h-24 p-1 border border-slate-700/50 relative">
                     <span className={`absolute top-1 right-1 text-xs font-bold ${dayEvents.length > 0 ? 'text-white' : 'text-slate-500'}`}>{day}</span>
                     <div className="flex flex-col gap-1 mt-5 overflow-hidden">
-                        {dayEvents.map((ev, idx) => (
-                            <div key={idx} className={`text-[8px] px-1 py-0.5 rounded truncate font-bold border-l-2 ${ev.type === 'report' ? 'bg-green-900/40 text-green-200 border-green-500' : 'bg-orange-900/40 text-orange-200 border-orange-500'}`}>
-                                <div className="truncate">{ev.title}</div>
-                            </div>
-                        ))}
+                        {dayEvents.map((ev, idx) => (<div key={idx} className={`text-[8px] px-1 py-0.5 rounded truncate font-bold border-l-2 ${ev.type === 'report' ? 'bg-green-900/40 text-green-200 border-green-500' : 'bg-orange-900/40 text-orange-200 border-orange-500'}`}><div className="truncate">{ev.title}</div></div>))}
                     </div>
                 </div>
             );
@@ -217,20 +179,12 @@ const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                 <h2 className="text-lg font-bold text-white capitalize">{monthName}</h2>
                 <button onClick={nextMonth} className="p-2 hover:bg-slate-700 rounded-lg text-slate-300"><Icons.ChevronRight/></button>
             </div>
-            
             <div className="grid grid-cols-7 gap-1">
                 {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => <div key={d} className="text-center py-2 bg-slate-800 text-[10px] uppercase text-slate-400 font-bold rounded-t-lg">{d}</div>)}
                 {renderDays()}
             </div>
-            
-            <div className="flex gap-4 text-xs text-slate-400 justify-center pt-2">
-                <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-full"></div> Relatórios Feitos</span>
-                <span className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-500 rounded-full"></div> Agendamentos</span>
-            </div>
-
-            <button onClick={onAddSchedule} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-slate-600">
-                <Icons.Plus size={16}/> Agendar Serviço Futuro
-            </button>
+            <div className="flex gap-4 text-xs text-slate-400 justify-center pt-2"><span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-full"></div> Relatórios Feitos</span><span className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-500 rounded-full"></div> Agendamentos</span></div>
+            <button onClick={onAddSchedule} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-slate-600"><Icons.Plus size={16}/> Agendar Serviço Futuro</button>
         </div>
     );
 };
@@ -244,14 +198,12 @@ function App() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
-    const [isUploading, setIsUploading] = useState(false); // NOVO: Estado de Upload
+    const [isUploading, setIsUploading] = useState(false);
     
-    // Estado para Agendamento e Modal de Dia
     const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
 
-    // Estado do Formulário
     const initialFormState = {
         controlNumber: '', branch: SAAM_BRANCHES[0], vesselName: '', enginePosition: '',
         engineModel: '', engineSerial: '', maintenanceType: MAINTENANCE_TYPES[0], maintenanceTypeOther: '',
@@ -265,128 +217,101 @@ function App() {
     const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
 
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
+    useEffect(() => { if (localStorage.getItem('hasSeenIntro')) setView('dashboard'); }, []);
 
-    // Lógica da Intro
-    useEffect(() => {
-        const hasSeenIntro = localStorage.getItem('hasSeenIntro');
-        if (hasSeenIntro) {
-            setView('dashboard');
-        }
-    }, []);
-
-    // FORMATAR NOME DO ARQUIVO/PÁGINA
+    // FORMATAR NOME DO ARQUIVO/PÁGINA (Com data segura)
     useEffect(() => {
         if (formData.vesselName) {
             const vessel = formData.vesselName.toUpperCase();
             const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-            const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
+            // Data bruta (YYYY-MM-DD), segura pra arquivo
+            const date = formData.startDate || 'DATA';
             document.title = `RB - ${vessel} - ${pos} - ${date}`;
         } else {
             document.title = "Retiblocos System";
         }
     }, [formData]);
 
-    // AUTH
     useEffect(() => {
         if(!auth) return;
         auth.signInAnonymously().catch(console.error);
         return auth.onAuthStateChanged(u => setUser(u));
     }, []);
 
-    // CARREGAR DADOS
     useEffect(() => {
         if (!user || !db) return;
-        
-        const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports')
-            .orderBy('savedAt', 'desc').limit(50)
-            .onSnapshot(s => setReports(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-        
-        const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules')
-            .orderBy('date', 'asc')
-            .onSnapshot(s => setSchedules(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-
+        const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports').orderBy('savedAt', 'desc').limit(50).onSnapshot(s => setReports(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules').orderBy('date', 'asc').onSnapshot(s => setSchedules(s.docs.map(d => ({ id: d.id, ...d.data() }))));
         return () => { unsubReports(); unsubSchedules(); };
     }, [user]);
 
-    const finishIntro = () => {
-        localStorage.setItem('hasSeenIntro', 'true');
-        setView('dashboard');
+    const finishIntro = () => { localStorage.setItem('hasSeenIntro', 'true'); setView('dashboard'); };
+
+    // --- FUNÇÕES DE DATA ---
+    const formatDate = (d) => {
+        if(!d) return '--/--/----';
+        const parts = d.split('-'); // Quebra "2023-10-01" em ["2023", "10", "01"]
+        if(parts.length !== 3) return d;
+        return `${parts[2]}/${parts[1]}/${parts[0]}`; // Retorna "01/10/2023"
     };
 
-    // --- LÓGICA DE AGENDAMENTO (CRIAR, EDITAR, DELETAR) ---
+    const calculateDuration = () => {
+        const s = new Date(`${formData.startDate}T${formData.startTime}`);
+        const e = new Date(`${formData.endDate}T${formData.endTime}`);
+        const d = e - s; if(d < 0) return "--";
+        return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
+    };
+
+    // --- LÓGICA DO APP ---
     const saveSchedule = async () => {
         if(!scheduleData.date || !scheduleData.vesselName) return alert("Preencha data e embarcação");
         try {
             const colRef = db.collection('artifacts').doc(appId).collection('schedules');
-            if (scheduleData.id) {
-                // EDIÇÃO
-                await colRef.doc(scheduleData.id).update(scheduleData);
-                alert("Agendamento atualizado!");
-            } else {
-                // CRIAÇÃO
-                await colRef.add(scheduleData);
-                alert("Agendado com sucesso!");
-            }
-            setShowScheduleModal(false);
-            setScheduleData({ date: '', vesselName: '', description: '' });
-            setSelectedDateEvents(null); // Fecha o modal de dia também se estiver aberto
-        } catch(e) { 
-            console.error(e);
-            alert("Erro ao salvar agendamento."); 
-        }
+            if (scheduleData.id) await colRef.doc(scheduleData.id).update(scheduleData); else await colRef.add(scheduleData);
+            setShowScheduleModal(false); setScheduleData({ date: '', vesselName: '', description: '' }); setSelectedDateEvents(null);
+            alert(scheduleData.id ? "Atualizado!" : "Agendado!");
+        } catch(e) { alert("Erro ao salvar."); }
     };
 
     const deleteSchedule = async (id) => {
-        if(!confirm("Tem certeza que deseja EXCLUIR este agendamento?")) return;
-        try {
-            await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete();
-            // Atualiza a lista local do modal se estiver aberto
-            if(selectedDateEvents) {
-                setSelectedDateEvents(prev => ({
-                    ...prev,
-                    events: prev.events.filter(e => e.id !== id)
-                }));
-            }
-        } catch(e) {
-            alert("Erro ao excluir.");
-        }
+        if(!confirm("Excluir agendamento?")) return;
+        try { await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); if(selectedDateEvents) setSelectedDateEvents(p => ({...p, events: p.events.filter(e => e.id !== id)})); } catch(e) { alert("Erro ao excluir."); }
     };
 
-    const openEditSchedule = (schedule) => {
-        setScheduleData(schedule);
-        setShowScheduleModal(true);
-    };
-
-    // --- LÓGICA DE RELATÓRIOS ---
-
+    const openEditSchedule = (s) => { setScheduleData(s); setShowScheduleModal(true); };
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
     
-    // Função para ir direto ao preview para imprimir
+    // CORREÇÃO CRÍTICA: Mescla os dados do relatório com o estado inicial para evitar campos undefined
     const openPreview = (e, report) => {
         if(e) e.stopPropagation();
-        setFormData(report);
+        
+        // Garante que campos opcionais (parts, photos) existam mesmo se vazios no banco
+        const safeData = { ...initialFormState, ...report };
+        setFormData(safeData);
+        
+        // Força título do documento imediatamente
+        const vessel = safeData.vesselName ? safeData.vesselName.toUpperCase() : 'RELATORIO';
+        const pos = safeData.enginePosition ? safeData.enginePosition.toUpperCase() : 'GERAL';
+        const date = safeData.startDate || 'DATA';
+        document.title = `RB - ${vessel} - ${pos} - ${date}`;
+        
         setView('preview');
     };
 
-    // FUNÇÃO DE IMPRESSÃO (SAFARI PWA SAFE)
-    const handlePrint = () => {
-        const vessel = formData.vesselName ? formData.vesselName.toUpperCase() : 'RELATORIO';
-        const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-        const date = formData.startDate ? formData.startDate.split('-').reverse().join('-') : 'DATA';
-        const safeTitle = `RB - ${vessel} - ${pos} - ${date}`;
-        document.title = safeTitle;
+    // CORREÇÃO: Sem delay para o Safari/PWA
+    const handlePrint = () => { window.print(); };
 
-        setIsPrinting(true);
-        setTimeout(() => {
-            window.print();
-            setIsPrinting(false);
-        }, 10);
+    // CORREÇÃO CRÍTICA: Mescla dados também na edição
+    const editReport = (e, report) => { 
+        if(e) e.stopPropagation(); 
+        const safeData = { ...initialFormState, ...report };
+        setFormData(safeData); 
+        setView('form'); 
     };
-
-    const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
+    
     const deleteReport = async (e, id) => {
         if(e) e.stopPropagation();
-        if (!confirm("Excluir este relatório?")) return;
+        if (!confirm("Excluir?")) return;
         try { await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
     };
 
@@ -396,69 +321,36 @@ function App() {
         const payload = dataToSave || formData;
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
-            // A verificação de tamanho pode ser relaxada agora que as imagens são links,
-            // mas mantemos um limite seguro para o texto.
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            if (jsonSize > 950000) { 
-                alert(`ERRO: Texto do relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). Tente reduzir a descrição.`); 
-                if(!silent) setIsSaving(false); return false; 
-            }
-            
+            if (jsonSize > 950000) { alert(`Texto muito longo. Reduza a descrição.`); if(!silent) setIsSaving(false); return false; }
             const colRef = db.collection('artifacts').doc(appId).collection('public_reports');
-            if (payload.id) {
-                await colRef.doc(payload.id).update(docData);
-            } else {
-                const ref = await colRef.add(docData);
-                setFormData(prev => ({ ...prev, id: ref.id }));
-            }
-            if(!silent) alert("Salvo com sucesso!");
+            if (payload.id) { await colRef.doc(payload.id).update(docData); } else { const ref = await colRef.add(docData); setFormData(prev => ({ ...prev, id: ref.id })); }
+            if(!silent) alert("Salvo!");
             return true;
         } catch (e) { console.error(e); alert("Erro ao salvar."); return false; } 
         finally { if(!silent) setIsSaving(false); }
     };
 
-    // --- LÓGICA DE UPLOAD PARA O STORAGE ---
     const handlePhotoUpload = async (e) => {
-        if (!storage) return alert("ERRO: Storage não configurado. Verifique se importou o script no HTML.");
-        
+        if (!storage) return alert("ERRO: Storage não configurado no HTML.");
         if (e.target.files) {
             const files = Array.from(e.target.files);
             const remainingSlots = MAX_PHOTOS - formData.photos.length;
             if (remainingSlots <= 0) return alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
-            
-            const filesToProcess = files.slice(0, remainingSlots);
-            
-            setIsUploading(true); // Bloqueia UI
-            
+            setIsUploading(true);
             try {
-                const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
-                    // 1. Comprimir (gera Base64)
+                const processedPhotos = await Promise.all(files.slice(0, remainingSlots).map(async (file) => {
                     const compressedDataUrl = await compressImage(file, 0.6, 800);
-                    
-                    // 2. Converter para Blob
                     const blob = dataURLtoBlob(compressedDataUrl);
-                    
-                    // 3. Criar Referência no Storage
-                    // Caminho: imagens/TIMESTAMP_RANDOM.jpg
                     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
                     const storageRef = storage.ref().child(`images/${fileName}`);
-                    
-                    // 4. Upload
                     await storageRef.put(blob);
-                    
-                    // 5. Pegar URL Pública
                     const downloadUrl = await storageRef.getDownloadURL();
-                    
                     return { id: Date.now() + Math.random(), url: downloadUrl, caption: '' };
                 }));
-                
                 setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
-            } catch (error) {
-                console.error("Erro no upload:", error);
-                alert("Erro ao enviar imagem. Verifique a conexão.");
-            } finally {
-                setIsUploading(false); // Libera UI
-            }
+            } catch (error) { console.error("Erro upload:", error); alert("Erro ao enviar imagem."); } 
+            finally { setIsUploading(false); }
         }
     };
 
@@ -466,76 +358,51 @@ function App() {
     const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
-    
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
-    
     const finalizeReport = async (clientSig) => {
         const finalData = { ...formData, clientSignature: clientSig };
         setFormData(finalData);
         const saved = await saveToCloud(finalData, true);
         setView('preview');
-        if(!saved) alert("Aviso: Não foi possível sincronizar na nuvem, mas o PDF pode ser gerado.");
+        if(!saved) alert("Não foi possível sincronizar, mas o PDF pode ser gerado.");
     };
-
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
     const isFormValid = () => formData.vesselName && formData.technicianName;
-    const calculateDuration = () => {
-        const s = new Date(`${formData.startDate}T${formData.startTime}`), e = new Date(`${formData.endDate}T${formData.endTime}`);
-        const d = e - s; if(d < 0) return "--";
-        return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
-    };
-    const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR');
-    
     const shareData = async () => {
         const dataStr = JSON.stringify(formData, null, 2);
-        // Formato Seguro para Nome de Arquivo (Backup JSON)
         const safe = (t) => t ? t.replace(/[^a-z0-9]/gi, '_').toUpperCase() : 'X';
         const fileName = `RB_${safe(formData.vesselName)}_${safe(formData.enginePosition)}_${formData.startDate}.json`;
-        
         const file = new File([dataStr], fileName, { type: 'application/json' });
         if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
-    const filteredReports = reports.filter(r => 
-        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredReports = reports.filter(r => (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
     return (
         <div className="min-h-screen">
-            
-            {/* VISTA 0: INTRODUÇÃO */}
             {view === 'intro' && <IntroAnimation onFinish={finishIntro} />}
-
-            {/* VISTA 1: DASHBOARD */}
             {view === 'dashboard' && (
                 <div key="dashboard" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex justify-between items-center py-4">
                         <div><h1 className="text-2xl font-black text-white uppercase tracking-tight">Painel de Controle</h1><p className="text-slate-400 text-sm">Bem-vindo ao sistema Retiblocos</p></div>
                         <div className="bg-orange-600 w-10 h-10 rounded-lg flex items-center justify-center font-black text-white">RB</div>
                     </div>
-                    
                     <button onClick={startNewReport} className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white p-6 rounded-2xl shadow-xl flex items-center justify-between group transition-all transform hover:scale-[1.01]">
                         <div className="flex items-center gap-4"><div className="bg-white/20 p-3 rounded-xl"><Icons.Pen size={24}/></div><div className="text-left"><h2 className="font-bold text-lg">Criar Novo Relatório</h2><p className="text-orange-100 text-xs">Preencher OS, peças e fotos</p></div></div>
                         <Icons.ArrowLeft className="rotate-180 opacity-50 group-hover:opacity-100 transition-opacity"/>
                     </button>
-
-                    {/* Botões de Acesso Rápido - BOTÃO DO CALENDÁRIO ESTÁ AQUI */}
                     <div className="grid grid-cols-2 gap-3">
                         <button onClick={() => setView('calendar')} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500 transition-all text-left group">
                             <div className="bg-blue-900/50 p-2 rounded-lg w-fit mb-2 text-blue-400 group-hover:text-white transition-colors"><Icons.Calendar size={20}/></div>
-                            <h3 className="font-bold text-white text-sm">Calendário</h3>
-                            <p className="text-xs text-slate-400">Ver agenda e histórico</p>
+                            <h3 className="font-bold text-white text-sm">Calendário</h3><p className="text-xs text-slate-400">Ver agenda e histórico</p>
                         </button>
                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                             <div className="bg-green-900/50 p-2 rounded-lg w-fit mb-2 text-green-400"><Icons.Check size={20}/></div>
-                            <h3 className="font-bold text-white text-sm">Status</h3>
-                            <p className="text-xs text-slate-400">{reports.length} Relatórios feitos</p>
+                            <h3 className="font-bold text-white text-sm">Status</h3><p className="text-xs text-slate-400">{reports.length} Relatórios feitos</p>
                         </div>
                     </div>
-
                     <div className="space-y-4 pt-2">
                         <div className="flex justify-between items-center"><h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Histórico Recente</h3><div className="relative"><Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/><input type="text" placeholder="Buscar..." className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-40" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
                         <div className="grid gap-3">
@@ -543,39 +410,12 @@ function App() {
                                 const isSigned = !!rep.technicianSignature;
                                 return (
                                     <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group relative overflow-hidden">
-                                        {/* STATUS INDICATOR (FINALIZADO/PENDENTE) */}
-                                        <div className="absolute top-2 right-2 flex gap-2">
-                                            <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${isSigned ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
-                                                {isSigned ? <Icons.Check size={10}/> : <Icons.Alert size={10}/>}
-                                                {isSigned ? 'Assinado' : 'Pendente'}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex justify-between items-start mb-2 pr-20">
-                                            <div>
-                                                <h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4>
-                                                <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3">
-                                            <span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span>
-                                            <span>•</span>
-                                            <span>{rep.maintenanceType}</span>
-                                        </div>
-                                        
+                                        <div className="absolute top-2 right-2 flex gap-2"><div className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${isSigned ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>{isSigned ? <Icons.Check size={10}/> : <Icons.Alert size={10}/>}{isSigned ? 'Assinado' : 'Pendente'}</div></div>
+                                        <div className="flex justify-between items-start mb-2 pr-20"><div><h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4><span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span></div></div>
+                                        <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3"><span className="flex items-center gap-1"><Icons.Clock size={12}/> {formatDate(rep.startDate)}</span><span>•</span><span>{rep.maintenanceType}</span></div>
                                         <div className="flex gap-2 mt-3">
-                                            {/* BOTÃO ESPECIAL PARA RELATÓRIOS ASSINADOS: VAI DIRETO PRO PDF */}
-                                            {isSigned && (
-                                                <button onClick={(e) => openPreview(e, rep)} className="flex-1 py-1.5 bg-purple-600/10 text-purple-400 rounded-lg hover:bg-purple-600/20 text-xs font-bold flex items-center justify-center gap-1">
-                                                    <Icons.Printer size={14}/> PDF
-                                                </button>
-                                            )}
-                                            
-                                            <button onClick={(e) => editReport(e, rep)} className="flex-1 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 text-xs font-bold flex items-center justify-center gap-1">
-                                                <Icons.Pen size={12}/> {isSigned ? 'Ver' : 'Editar'}
-                                            </button>
-                                            
+                                            {isSigned && <button onClick={(e) => openPreview(e, rep)} className="flex-1 py-1.5 bg-purple-600/10 text-purple-400 rounded-lg hover:bg-purple-600/20 text-xs font-bold flex items-center justify-center gap-1"><Icons.Printer size={14}/> PDF</button>}
+                                            <button onClick={(e) => editReport(e, rep)} className="flex-1 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 text-xs font-bold flex items-center justify-center gap-1"><Icons.Pen size={12}/> {isSigned ? 'Ver' : 'Editar'}</button>
                                             <button onClick={(e) => deleteReport(e, rep.id)} className="w-10 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600/20 flex items-center justify-center"><Icons.Trash size={14}/></button>
                                         </div>
                                     </div>
@@ -585,33 +425,12 @@ function App() {
                     </div>
                 </div>
             )}
-
-            {/* VISTA 2: CALENDÁRIO */}
             {view === 'calendar' && (
                 <div key="calendar" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
-                    <div className="flex items-center gap-4 mb-4">
-                        <button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button>
-                        <h1 className="text-xl font-bold text-white">Agenda de Serviços</h1>
-                    </div>
-                    
-                    <CalendarView 
-                        reports={reports} 
-                        schedules={schedules} 
-                        onDateClick={(date, events) => {
-                            if(events.length > 0) {
-                                setSelectedDateEvents({ date, events });
-                            } else {
-                                if(confirm(`Agendar serviço para ${new Date(date).toLocaleDateString('pt-BR')}?`)) {
-                                    setScheduleData({...scheduleData, date, id: null}); setShowScheduleModal(true);
-                                }
-                            }
-                        }} 
-                        onAddSchedule={() => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
-                    />
+                    <div className="flex items-center gap-4 mb-4"><button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button><h1 className="text-xl font-bold text-white">Agenda de Serviços</h1></div>
+                    <CalendarView reports={reports} schedules={schedules} onDateClick={(date, events) => { if(events.length > 0) setSelectedDateEvents({ date, events }); else if(confirm(`Agendar serviço para ${formatDate(date)}?`)) { setScheduleData({...scheduleData, date, id: null}); setShowScheduleModal(true); } }} onAddSchedule={() => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} />
                 </div>
             )}
-
-            {/* HEADER FORM/PREVIEW */}
             {(view === 'form' || view === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -624,8 +443,6 @@ function App() {
                     </div>
                 </div>
             )}
-
-            {/* FORMULÁRIO */}
             {view === 'form' && (
                 <div key="form" className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                      <div className="space-y-4">
@@ -643,7 +460,6 @@ function App() {
                         </div>
                         <div className="grid grid-cols-4 gap-2">{ENGINE_POSITIONS.map(p => (<button key={p.id} onClick={() => setFormData({...formData, enginePosition: p.label})} className={`py-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>{p.short}</button>))}</div>
                     </div>
-
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Detalhes</h3>
                         <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>{MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
@@ -654,14 +470,12 @@ function App() {
                         </div>
                         <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Nome do Técnico" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} />
                     </div>
-
                     <div className="space-y-4">
                         <label className="text-xs text-green-400 font-bold uppercase">1. Execução (Realizado)</label>
                         <textarea rows={6} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-green-500" placeholder="Descreva o serviço..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
                         <label className="text-xs text-blue-400 font-bold uppercase">2. Observações</label>
                         <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500" placeholder="Pendências..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
                     </div>
-
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2"><Icons.Box size={16}/> Peças</h3>
                         <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
@@ -674,9 +488,8 @@ function App() {
                         </div>
                         {formData.parts.length > 0 && <div className="space-y-2">{formData.parts.map(part => (<div key={part.id} className="flex items-center justify-between bg-slate-800/50 p-2 rounded border border-slate-700/50"><div className="flex-1"><span className="font-bold text-sm text-slate-200">{part.qty}x {part.name}</span><span className={`block text-[10px] font-bold uppercase ${part.source === 'Retiblocos' ? 'text-orange-400' : 'text-blue-400'}`}>{part.source}</span></div><button onClick={() => removePart(part.id)} className="text-slate-500 hover:text-red-500 p-2"><Icons.Trash size={16}/></button></div>))}</div>}
                     </div>
-
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex justify-between items-center">
+                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2">
                             <span>Fotos</span>
                             <span className={`text-xs px-2 py-1 rounded ${formData.photos.length >= MAX_PHOTOS ? 'bg-red-900 text-red-200' : 'bg-slate-700 text-slate-300'}`}>{formData.photos.length}/{MAX_PHOTOS}</span>
                         </h3>
@@ -688,76 +501,41 @@ function App() {
                                     <input type="text" placeholder="Legenda..." className="w-full bg-slate-900 text-[10px] p-2 text-slate-300 outline-none border-t border-slate-700" value={photo.caption} onChange={e => updateCaption(photo.id, e.target.value)} />
                                 </div>
                             ))}
-                            
-                            {isUploading ? (
-                                <div className="h-32 border-2 border-dashed border-orange-500/50 bg-slate-800 rounded-lg flex flex-col items-center justify-center text-orange-500 animate-pulse">
-                                    <Icons.Spinner size={24}/>
-                                    <span className="text-xs mt-2 font-bold uppercase">Enviando...</span>
-                                </div>
-                            ) : (
-                                <label className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${formData.photos.length >= MAX_PHOTOS ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500'}`}>
-                                    <Icons.Plus size={24} /><span className="text-xs mt-2 font-bold">Add Foto</span>
-                                    <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={formData.photos.length >= MAX_PHOTOS}/>
-                                </label>
-                            )}
+                            {isUploading ? (<div className="h-32 border-2 border-dashed border-orange-500/50 bg-slate-800 rounded-lg flex flex-col items-center justify-center text-orange-500 animate-pulse"><Icons.Spinner size={24}/><span className="text-xs mt-2 font-bold uppercase">Enviando...</span></div>) : (<label className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${formData.photos.length >= MAX_PHOTOS ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500'}`}><Icons.Plus size={24} /><span className="text-xs mt-2 font-bold">Add Foto</span><input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={formData.photos.length >= MAX_PHOTOS}/></label>)}
                         </div>
                     </div>
-
-                    {/* BARRA DE AÇÃO FIXA / LÓGICA DE ASSINATURA */}
                     <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900/95 backdrop-blur border-t border-slate-700 z-40">
                         <div className="max-w-2xl mx-auto">
                             {formData.technicianSignature ? (
                                 <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-green-500">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white"><Icons.Check/></div>
-                                        <div>
-                                            <p className="text-green-400 font-bold text-sm uppercase">Relatório Assinado</p>
-                                            <p className="text-[10px] text-slate-400">Técnico confirmou.</p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => { if(confirm("Deseja remover a assinatura e desbloquear o relatório?")) setFormData({...formData, technicianSignature: null}); }} 
-                                        className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2"
-                                    >
-                                        Remover/Corrigir
-                                    </button>
+                                    <div className="flex items-center gap-3"><div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white"><Icons.Check/></div><div><p className="text-green-400 font-bold text-sm uppercase">Relatório Assinado</p><p className="text-[10px] text-slate-400">Técnico confirmou.</p></div></div>
+                                    <button onClick={() => { if(confirm("Remover assinatura?")) setFormData({...formData, technicianSignature: null}); }} className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2">Remover/Corrigir</button>
                                 </div>
                             ) : (
-                                <button disabled={!isFormValid() || isUploading} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() && !isUploading ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
-                                    {isUploading ? <><Icons.Spinner/> Aguarde o Upload...</> : <><Icons.Pen size={20} /> Assinar e Finalizar</>}
-                                </button>
+                                <button disabled={!isFormValid() || isUploading} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() && !isUploading ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>{isUploading ? <><Icons.Spinner/> Aguarde...</> : <><Icons.Pen size={20} /> Assinar e Finalizar</>}</button>
                             )}
                         </div>
                     </div>
                 </div>
             )}
-
-            {/* MODAL AGENDAMENTO (CRIAR/EDITAR) */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
                     <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
-                        <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>
+                        <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar' : 'Novo'} Agendamento</h3>
                         <div className="space-y-3">
                             <input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
                             <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
                             <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
                         </div>
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowScheduleModal(false)} className="flex-1 py-2 text-slate-400">Cancelar</button>
-                            <button onClick={saveSchedule} className="flex-1 py-2 bg-orange-600 text-white rounded font-bold">
-                                {scheduleData.id ? 'Atualizar' : 'Agendar'}
-                            </button>
-                        </div>
+                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-2 text-slate-400">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-2 bg-orange-600 text-white rounded font-bold">{scheduleData.id ? 'Atualizar' : 'Agendar'}</button></div>
                     </div>
                 </div>
             )}
-
-            {/* MODAL DETALHES DO DIA (LISTA DE EVENTOS PARA EDITAR/EXCLUIR) */}
             {selectedDateEvents && (
                 <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
                     <div className="bg-slate-800 rounded-xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
                         <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-white capitalize">{new Date(selectedDateEvents.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+                            <h3 className="text-lg font-bold text-white capitalize">{formatDate(selectedDateEvents.date)}</h3>
                             <button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><Icons.ArrowLeft className="rotate-180"/></button>
                         </div>
                         <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
@@ -765,67 +543,30 @@ function App() {
                             {selectedDateEvents.events.map((evt, idx) => (
                                 <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${evt.type === 'report' ? 'bg-green-900/20 border-green-500/30' : 'bg-orange-900/20 border-orange-500/30'}`}>
                                     <div className="overflow-hidden mr-3">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
-                                                {evt.type === 'report' ? 'Realizado' : 'Agendado'}
-                                            </span>
-                                            <span className="text-xs text-slate-400 font-mono">{evt.time}</span>
-                                        </div>
-                                        <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>
-                                        {evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
+                                        <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{evt.type === 'report' ? 'Realizado' : 'Agendado'}</span><span className="text-xs text-slate-400 font-mono">{evt.time}</span></div>
+                                        <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>{evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
-                                        {evt.type === 'schedule' ? (
-                                            <>
-                                                <button onClick={() => openEditSchedule(evt)} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button>
-                                                <button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button>
-                                            </>
-                                        ) : (
-                                            <button onClick={() => { setSelectedDateEvents(null); openPreview(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>
-                                        )}
-                                    </div>
+                                    <div className="flex gap-2 shrink-0">{evt.type === 'schedule' ? (<><button onClick={() => openEditSchedule(evt)} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button><button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button></>) : (<button onClick={() => { setSelectedDateEvents(null); openPreview(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>)}</div>
                                 </div>
                             ))}
                         </div>
-                        <div className="p-4 border-t border-slate-700 bg-slate-900/50">
-                            <button 
-                                onClick={() => { setScheduleData({date: selectedDateEvents.date, vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
-                                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"
-                            >
-                                <Icons.Plus size={16}/> Adicionar Outro Agendamento
-                            </button>
-                        </div>
+                        <div className="p-4 border-t border-slate-700 bg-slate-900/50"><button onClick={() => { setScheduleData({date: selectedDateEvents.date, vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"><Icons.Plus size={16}/> Adicionar Outro Agendamento</button></div>
                     </div>
                 </div>
             )}
-
-            {/* ASSINATURAS */}
             {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
-
-            {/* PREVIEW FINAL */}
             {view === 'preview' && (
                 <div key="preview" className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
                     <div><h2 className="text-2xl font-bold text-white mb-1">Pronto para Imprimir</h2><p className="text-slate-400 text-sm">Clique abaixo para gerar o PDF.</p></div>
                     <div className="w-full space-y-3">
-                        <button 
-                            onClick={handlePrint} 
-                            disabled={isPrinting}
-                            className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 active:border-0 active:translate-y-1 transition-all ${isPrinting ? 'bg-purple-600 text-white border-purple-800 cursor-wait' : 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'}`}
-                        >
-                            {isPrinting ? <><Icons.Spinner size={20}/> ⌛ Preparando PDF...</> : <><Icons.Printer size={20}/> Gerar PDF / Imprimir</>}
-                        </button>
+                        <button onClick={handlePrint} disabled={isPrinting} className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 active:border-0 active:translate-y-1 transition-all ${isPrinting ? 'bg-purple-600 text-white border-purple-800 cursor-wait' : 'bg-white hover:bg-slate-100 text-slate-900 border-slate-300'}`}>{isPrinting ? <><Icons.Spinner size={20}/> ⌛ Preparando...</> : <><Icons.Printer size={20}/> Gerar PDF / Imprimir</>}</button>
                         <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Backup de Dados (JSON)</button>
                     </div>
-                    <div className="flex gap-4 w-full pt-4">
-                        <button onClick={startNewReport} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Novo Relatório</button>
-                        <button onClick={() => setView('dashboard')} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Ir ao Início</button>
-                    </div>
+                    <div className="flex gap-4 w-full pt-4"><button onClick={startNewReport} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Novo Relatório</button><button onClick={() => setView('dashboard')} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Ir ao Início</button></div>
                 </div>
             )}
-
-            {/* LAYOUT DE IMPRESSÃO (PDF) */}
             <div className="print-only print-container bg-white text-slate-900 relative">
                 <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
                     <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
@@ -834,12 +575,10 @@ function App() {
                         <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div><div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
                     </div>
                 </div>
-
                 <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
                     <div><span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span><span className="font-bold text-slate-900 text-sm">{formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}</span></div>
                     <div className="text-right"><span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span><div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-800"><span>{formatDate(formData.startDate)} {formData.startTime}</span><span className="text-orange-400">➜</span><span>{formatDate(formData.endDate)} {formData.endTime}</span></div><div className="text-[9px] font-bold text-orange-600 mt-0.5">Duração: {calculateDuration()}</div></div>
                 </div>
-
                 <div className="mb-4 grid grid-cols-4 gap-2 text-[10px]">
                     <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Embarcação</span><span className="block font-bold text-slate-900 uppercase">{formData.vesselName}</span></div>
                     <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Motor</span><span className="block font-bold text-slate-900 uppercase">{formData.engineModel}</span></div>
@@ -847,19 +586,16 @@ function App() {
                     <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Horímetro</span><span className="block font-bold text-slate-900 font-mono">{formData.runningHours} H</span></div>
                     <div className="p-2 border border-slate-200 rounded bg-slate-50/50 col-span-4"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Série</span><span className="block font-bold text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span></div>
                 </div>
-
                 <div className="space-y-4">
-                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div></div>
+                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-900 pl-3">{formData.tasksExecuted}</div></div>
                     {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
                 </div>
-
                 {formData.parts.length > 0 && (
                     <div className="mt-4 break-inside-avoid">
                         <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
                         <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
                     </div>
                 )}
-
                 {formData.photos.length > 0 && (
                     <div className="mt-6">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Registro Fotográfico</h4>
@@ -868,13 +604,12 @@ function App() {
                         </div>
                     </div>
                 )}
-
                 <div className="mt-8 pt-4 border-t-2 border-slate-800 break-inside-avoid">
                     <div className="grid grid-cols-2 gap-10">
                         <div className="text-center">{formData.technicianSignature ? <img src={formData.technicianSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">{formData.technicianName}</p><p className="text-[8px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p></div></div>
                         <div className="text-center">{formData.clientSignature ? <img src={formData.clientSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">Aprovação Cliente</p><p className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p></div></div>
                     </div>
-                    <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - {new Date().toLocaleDateString()}</div>
+                    <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - {formatDate(new Date().toISOString().split('T')[0])}</div>
                 </div>
             </div>
         </div>
