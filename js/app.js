@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V5.0 (Com Roteador Nativo e RBAC)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V5.1 (Multi-Agendamento e Fix de Edição)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -108,6 +108,44 @@ const IntroAnimation = ({ onFinish }) => {
     );
 };
 
+const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
+    const canvasRef = useRef(null);
+    useEffect(() => {
+        window.scrollTo(0, 0); document.body.style.overflow = 'hidden'; 
+        const timer = setTimeout(() => {
+            const canvas = canvasRef.current; if (!canvas) return;
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
+            const ctx = canvas.getContext('2d'); ctx.scale(ratio, ratio);
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        }, 300);
+        return () => { document.body.style.overflow = 'auto'; clearTimeout(timer); };
+    }, []);
+    const getPos = (e) => { const r = canvasRef.current.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+    const start = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); };
+    const move = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); };
+    return (
+        <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[70vh]">
+                <div className="bg-slate-100 p-4 border-b flex justify-between items-center shrink-0">
+                    <h3 className="text-slate-800 font-bold text-lg">{title}</h3>
+                    <button onClick={() => {const c=canvasRef.current;c.getContext('2d').clearRect(0,0,c.width,c.height);c.getContext('2d').beginPath();}} className="text-slate-500 hover:text-red-500 p-2"><Icons.Refresh /></button>
+                </div>
+                <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair touch-none">
+                    <canvas ref={canvasRef} className="w-full h-full block touch-none" onMouseDown={start} onMouseMove={move} onTouchStart={start} onTouchMove={move} />
+                    <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none text-slate-200 text-3xl font-black opacity-20 uppercase select-none">Assine Aqui</div>
+                </div>
+                <div className="bg-slate-50 p-4 border-t flex gap-3 shrink-0">
+                    <button onClick={onCancel} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-200 rounded-lg">Voltar</button>
+                    {onSkip && <button onClick={onSkip} className="flex-1 py-3 font-semibold text-orange-600 hover:bg-orange-50 rounded-lg flex items-center justify-center gap-1"><Icons.Skip size={16}/> Pular</button>}
+                    <button onClick={() => onSave(canvasRef.current.toDataURL())} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // COMPONENTE PARA RENDERIZAR OS MÓDULOS DE FORMA SEGURA
 const SafeComponent = ({ name, props }) => {
     if (typeof window[name] === 'function') { 
@@ -124,7 +162,6 @@ const SafeComponent = ({ name, props }) => {
 
 // --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
-    // ESTADO INTERNO (NÃO USE DIRETAMENTE PARA NAVEGAR)
     const [rawView, setRawView] = useState('loading'); 
     
     const [user, setUser] = useState(null);
@@ -137,13 +174,13 @@ function App() {
     const [isPrinting, setIsPrinting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     
-    // --- ESTADO GLOBAL DE DIÁLOGOS CUSTOMIZADOS ---
     const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
     const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
     const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
     const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
 
-    const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '', id: null });
+    // ADICIONADO O ENDDATE NO ESTADO DE AGENDAMENTO
+    const [scheduleData, setScheduleData] = useState({ date: '', endDate: '', vesselName: '', description: '', id: null });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
 
@@ -159,25 +196,19 @@ function App() {
     const [formData, setFormData] = useState(initialFormState);
 
     // ==============================================================================
-    // A MÁGICA DE NAVEGAÇÃO (INTERCEPTADOR DO BOTÃO VOLTAR DO NAVEGADOR)
+    // A MÁGICA DE NAVEGAÇÃO
     // ==============================================================================
-    
-    // Função oficial para mudar a tela (Atualiza o React E a URL do navegador)
     const setView = (newView) => {
         setRawView(newView);
-        // Cria um ponto na história do navegador (Ex: seusite.com/#dashboard)
         window.history.pushState({ view: newView }, '', `#${newView}`);
-        window.scrollTo(0, 0); // Joga a tela pro topo
+        window.scrollTo(0, 0); 
     };
 
-    // Escuta ativamente quando o usuário clica no botão voltar do celular/navegador
     useEffect(() => {
         const handlePopState = (event) => {
-            // Se o navegador souber em qual tela a gente tava, volta pra ela
             if (event.state && event.state.view) {
                 setRawView(event.state.view);
             } else {
-                // Se o navegador se perder, a gente joga pro dashboard (ou pro login se tiver deslogado)
                 const fallback = window.auth?.currentUser ? 'dashboard' : 'auth';
                 setRawView(fallback);
                 window.history.replaceState({ view: fallback }, '', `#${fallback}`);
@@ -188,10 +219,8 @@ function App() {
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
-    // REMOVE O LOADING SCREEN NATIVO
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
-    // FIX DO TÍTULO E IMPRESSÃO FANTASMA
     useEffect(() => {
         if (rawView === 'form' || rawView === 'preview') {
             if (formData.vesselName) {
@@ -207,7 +236,6 @@ function App() {
         }
     }, [formData, rawView]);
 
-    // O CÃO DE GUARDA (AUTENTICAÇÃO E ROTA INICIAL)
     useEffect(() => {
         if(!window.auth) return;
         
@@ -219,7 +247,6 @@ function App() {
                     return;
                 }
 
-                // Usuário logado: Busca as permissões dele
                 const doc = await window.db.collection('users').doc(u.uid).get();
                 if (doc.exists) {
                     const userData = doc.data();
@@ -229,12 +256,10 @@ function App() {
                     setCurrentUserData({ name: u.email, role: 'client' }); 
                 }
                 
-                // Define a rota inicial substituindo o histórico (pra não criar sujeira no voltar)
                 const targetView = !localStorage.getItem('hasSeenIntro') ? 'intro' : 'dashboard';
                 setRawView(targetView);
                 window.history.replaceState({ view: targetView }, '', `#${targetView}`);
             } else {
-                // Usuário Deslogado
                 setCurrentUserData(null);
                 setRawView('auth');
                 window.history.replaceState({ view: 'auth' }, '', '#auth');
@@ -244,7 +269,6 @@ function App() {
         return () => unsubscribe();
     }, []);
 
-    // LER DADOS DO FIREBASE (SÓ SE ESTIVER LOGADO)
     useEffect(() => {
         if (!user || !window.db) return;
         
@@ -268,16 +292,79 @@ function App() {
         return `${parts[2]}/${parts[1]}/${parts[0]}`; 
     };
 
-    // --- LÓGICA DE AGENDAMENTO ---
+    // ==============================================================================
+    // LÓGICA DE AGENDAMENTO (AGORA COM MULTI-DIAS E EDIÇÃO CORRIGIDA)
+    // ==============================================================================
     const saveSchedule = async () => {
-        if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data e o nome da embarcação.");
+        if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data inicial e o nome da embarcação.");
+        
         try {
             const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
-            const { id, ...dataToSave } = scheduleData;
-            if (scheduleData.id) { await colRef.doc(scheduleData.id).update(dataToSave); showAlert("Sucesso", "Agendamento atualizado com sucesso!"); } 
-            else { await colRef.add(dataToSave); showAlert("Sucesso", "Serviço agendado com sucesso!"); }
-            setShowScheduleModal(false); setScheduleData({ date: '', vesselName: '', description: '', id: null }); setSelectedDateEvents(null); 
-        } catch(e) { showAlert("Erro", "Erro ao salvar agendamento."); }
+            
+            // Dados brutos sem o ID e a endDate (que não precisam ir pro banco)
+            const baseData = {
+                vesselName: scheduleData.vesselName,
+                description: scheduleData.description
+            };
+
+            if (scheduleData.id) {
+                // SE É EDIÇÃO: Atualiza apenas o dia exato daquele ID.
+                await colRef.doc(scheduleData.id).update({
+                    ...baseData,
+                    date: scheduleData.date
+                });
+                showAlert("Sucesso", "Agendamento atualizado com sucesso!");
+            } else {
+                // SE É CRIAÇÃO: Verifica se tem Data Final
+                if (scheduleData.endDate && scheduleData.endDate !== scheduleData.date) {
+                    // Força meio-dia para o maldito fuso horário não pular dia
+                    let currDate = new Date(scheduleData.date + 'T12:00:00');
+                    let lastDate = new Date(scheduleData.endDate + 'T12:00:00');
+                    
+                    if (lastDate < currDate) return showAlert("Erro de Lógica", "A data final não pode ser antes da inicial, né amigão?");
+                    
+                    const diffTime = Math.abs(lastDate - currDate);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                    
+                    if (diffDays > 60) return showAlert("Exagero", "Você está tentando agendar mais de 60 dias seguidos. Pare de loucura.");
+
+                    // Criação em lote (Batch)
+                    const batch = window.db.batch();
+                    while (currDate <= lastDate) {
+                        const dateStr = currDate.toISOString().split('T')[0];
+                        const docRef = colRef.doc(); // Gera um ID novo pra cada dia
+                        batch.set(docRef, { ...baseData, date: dateStr });
+                        currDate.setDate(currDate.getDate() + 1);
+                    }
+                    await batch.commit();
+                    showAlert("Sucesso", `Foram criados agendamentos individuais para ${diffDays + 1} dias!`);
+                } else {
+                    // SE É SÓ UM DIA MESMO
+                    await colRef.add({ ...baseData, date: scheduleData.date });
+                    showAlert("Sucesso", "Serviço agendado!");
+                }
+            }
+            
+            setShowScheduleModal(false); 
+            setScheduleData({ date: '', endDate: '', vesselName: '', description: '', id: null }); 
+            setSelectedDateEvents(null); 
+        } catch(e) { 
+            console.error(e);
+            showAlert("Erro", "Erro ao salvar agendamento."); 
+        }
+    };
+
+    // FUNÇÃO DE ABRIR A EDIÇÃO (LIMPANDO O LIXO DO CALENDÁRIO)
+    const openEditSchedule = (evt) => {
+        // Pega só o que importa do evento que o calendário passou
+        setScheduleData({
+            id: evt.id,
+            date: evt.date || '',
+            endDate: '', // Na edição, a gente trava a data final (não dá pra editar blocos)
+            vesselName: evt.vesselName || '',
+            description: evt.description || ''
+        });
+        setShowScheduleModal(true);
     };
 
     const deleteSchedule = (id) => {
@@ -304,8 +391,6 @@ function App() {
         setView('preview');
     };
 
-    const handlePrint = () => { window.print(); };
-
     const editReport = (e, report) => { 
         if(e) e.stopPropagation(); 
         const safeData = { ...initialFormState, ...report };
@@ -328,7 +413,6 @@ function App() {
         const payload = dataToSave || formData;
         const { id, ...dataLimpa } = payload;
         
-        // AUDITORIA: Salva quem criou a nota
         dataLimpa.createdBy = user.uid;
         dataLimpa.createdByName = currentUserData?.name || 'Desconhecido';
         
@@ -403,7 +487,7 @@ function App() {
 
     return (
         <div className="min-h-screen relative">
-            {/* ROTEADOR DE TELAS: Usando rawView ao invés de view para a renderização condicional */}
+            {/* ROTEADOR DE TELAS */}
             {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             
             {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
@@ -431,9 +515,9 @@ function App() {
                             reports, schedules, 
                             onDateClick: (date, events) => { 
                                 if(events.length > 0) setSelectedDateEvents({ date, events }); 
-                                else showConfirm("Agendar Serviço", `Criar agendamento para ${formatDate(date)}?`, () => { setScheduleData({date, vesselName: '', description: '', id: null}); setShowScheduleModal(true); });
+                                else showConfirm("Agendar Serviço", `Criar agendamento para ${formatDate(date)}?`, () => { setScheduleData({date, endDate: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); });
                             },
-                            onAddSchedule: () => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }
+                            onAddSchedule: () => { setScheduleData({date: '', endDate: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }
                         }} 
                     />
                 </div>
@@ -460,17 +544,36 @@ function App() {
                 />
             )}
             
-            {/* MODAL DE AGENDAMENTO E DETALHES DO DIA */}
+            {/* MODAL DE AGENDAMENTO (NOVO MULTI-DIAS) */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
                         <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar' : 'Novo'} Agendamento</h3>
                         <div className="space-y-3">
-                            <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Inicial</label>
+                                    <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Final</label>
+                                    <input 
+                                        type="date" 
+                                        className={`w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm ${scheduleData.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        value={scheduleData.endDate} 
+                                        onChange={e => setScheduleData({...scheduleData, endDate: e.target.value})} 
+                                        disabled={!!scheduleData.id}
+                                        title={scheduleData.id ? "Apenas em novos agendamentos" : "Opcional"}
+                                    />
+                                </div>
+                            </div>
                             <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
                             <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
                         </div>
-                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:bg-slate-700 rounded-lg transition-colors">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-lg font-bold shadow-lg shadow-orange-900/20">{scheduleData.id ? 'Atualizar' : 'Agendar'}</button></div>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => setShowScheduleModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:bg-slate-700 rounded-lg transition-colors">Cancelar</button>
+                            <button onClick={saveSchedule} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-lg font-bold shadow-lg shadow-orange-900/20">{scheduleData.id ? 'Atualizar' : 'Agendar'}</button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -494,7 +597,7 @@ function App() {
                                 </div>
                             ))}
                         </div>
-                        <div className="p-4 border-t border-slate-700 bg-slate-900/50"><button onClick={() => { setScheduleData({date: selectedDateEvents.date, vesselName: '', description: '', id: null}); setShowScheduleModal(true); setSelectedDateEvents(null); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"><Icons.Plus size={16}/> Adicionar Outro Agendamento</button></div>
+                        <div className="p-4 border-t border-slate-700 bg-slate-900/50"><button onClick={() => { setScheduleData({date: selectedDateEvents.date, endDate: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); setSelectedDateEvents(null); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"><Icons.Plus size={16}/> Adicionar Outro Agendamento</button></div>
                     </div>
                 </div>
             )}
@@ -506,7 +609,7 @@ function App() {
             {/* TELA DE SUCESSO E PDF */}
             {rawView === 'preview' && (
                 <>
-                    <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint, isPrinting, shareData }} />
+                    <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint: () => window.print(), isPrinting: false, shareData }} />
                     <SafeComponent name="PrintLayoutView" props={{ formData, formatDate, duration: calculateDuration() }} />
                 </>
             )}
