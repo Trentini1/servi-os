@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V4.0 (Autenticação e Modularidade Completa)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V4.1 (Exorcizando Fantasmas)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -108,45 +108,7 @@ const IntroAnimation = ({ onFinish }) => {
     );
 };
 
-const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
-    const canvasRef = useRef(null);
-    useEffect(() => {
-        window.scrollTo(0, 0); document.body.style.overflow = 'hidden'; 
-        const timer = setTimeout(() => {
-            const canvas = canvasRef.current; if (!canvas) return;
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
-            const ctx = canvas.getContext('2d'); ctx.scale(ratio, ratio);
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        }, 300);
-        return () => { document.body.style.overflow = 'auto'; clearTimeout(timer); };
-    }, []);
-    const getPos = (e) => { const r = canvasRef.current.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top }; };
-    const start = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); };
-    const move = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); };
-    return (
-        <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[70vh]">
-                <div className="bg-slate-100 p-4 border-b flex justify-between items-center shrink-0">
-                    <h3 className="text-slate-800 font-bold text-lg">{title}</h3>
-                    <button onClick={() => {const c=canvasRef.current;c.getContext('2d').clearRect(0,0,c.width,c.height);c.getContext('2d').beginPath();}} className="text-slate-500 hover:text-red-500 p-2"><Icons.Refresh /></button>
-                </div>
-                <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair touch-none">
-                    <canvas ref={canvasRef} className="w-full h-full block touch-none" onMouseDown={start} onMouseMove={move} onTouchStart={start} onTouchMove={move} />
-                    <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none text-slate-200 text-3xl font-black opacity-20 uppercase select-none">Assine Aqui</div>
-                </div>
-                <div className="bg-slate-50 p-4 border-t flex gap-3 shrink-0">
-                    <button onClick={onCancel} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-200 rounded-lg">Voltar</button>
-                    {onSkip && <button onClick={onSkip} className="flex-1 py-3 font-semibold text-orange-600 hover:bg-orange-50 rounded-lg flex items-center justify-center gap-1"><Icons.Skip size={16}/> Pular</button>}
-                    <button onClick={() => onSave(canvasRef.current.toDataURL())} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg">Confirmar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// COMPONENTE PARA RENDERIZAR OS MÓDULOS DE FORMA SEGURA (Previnindo o Erro 130)
+// COMPONENTE PARA RENDERIZAR OS MÓDULOS DE FORMA SEGURA
 const SafeComponent = ({ name, props }) => {
     if (typeof window[name] === 'function') { 
         return React.createElement(window[name], props); 
@@ -155,14 +117,14 @@ const SafeComponent = ({ name, props }) => {
         <div className="p-6 bg-slate-800 border border-red-500 rounded-xl text-center shadow-xl max-w-md mx-auto mt-10">
             <Icons.Warning size={40} className="text-red-500 mx-auto mb-3" />
             <h3 className="text-red-400 font-bold text-lg mb-2">Erro Crítico</h3>
-            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> ({name === 'AuthView' ? 'auth.js' : name === 'DashboardView' ? 'dashboard.js' : name === 'CalendarView' ? 'calendar.js' : name === 'AdminView' ? 'admin.js' : 'report.js'}) não foi encontrado. Verifique se ele está no <code>index.html</code> ANTES do <code>app.js</code>.</p>
+            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> não foi encontrado. Verifique se ele está no <code>index.html</code> ANTES do <code>app.js</code>.</p>
         </div>
     );
 };
 
 // --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
-    const [view, setView] = useState('loading'); // Começa carregando a autenticação
+    const [view, setView] = useState('loading');
     const [user, setUser] = useState(null);
     const [currentUserData, setCurrentUserData] = useState(null);
     
@@ -194,7 +156,7 @@ function App() {
 
     const [formData, setFormData] = useState(initialFormState);
 
-    // REMOVE O LOADING SCREEN NATIVO DO HTML ASSIM QUE O REACT ASSUME
+    // REMOVE O LOADING SCREEN NATIVO
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
     // FIX DO TÍTULO E IMPRESSÃO FANTASMA
@@ -213,13 +175,19 @@ function App() {
         }
     }, [formData, view]);
 
-    // O CÃO DE GUARDA (AUTENTICAÇÃO)
+    // O CÃO DE GUARDA (AUTENTICAÇÃO) - AGORA BLINDADO CONTRA SESSÃO ANÔNIMA
     useEffect(() => {
         if(!window.auth) return;
         
         const unsubscribe = window.auth.onAuthStateChanged(async (u) => {
             setUser(u);
             if (u) {
+                // EXORCISMO: Se você for um usuário anônimo (o fantasma), o sistema te expulsa imediatamente.
+                if (u.isAnonymous) {
+                    await window.auth.signOut();
+                    return;
+                }
+
                 // Usuário logado: Busca as permissões dele
                 const doc = await window.db.collection('users').doc(u.uid).get();
                 if (doc.exists) {
@@ -230,7 +198,6 @@ function App() {
                     setCurrentUserData({ name: u.email, role: 'client' }); 
                 }
                 
-                // Se ainda não viu a intro, mostra. Senão, vai pro dashboard
                 if (!localStorage.getItem('hasSeenIntro')) {
                     setView('intro');
                 } else {
@@ -508,14 +475,6 @@ function App() {
                 </div>
             )}
             
-            {/* ASSINATURAS */}
-            {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
-            {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
-            
-            {view === 'preview' && (
-                <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint, isPrinting, shareData }} />
-            )}
-            
             {/* SISTEMA DE MODAL CUSTOMIZADO (ANTI-PREGUIÇA) */}
             {dialog.isOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
@@ -533,11 +492,6 @@ function App() {
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* O PDF DE VERDADE */}
-            {view === 'preview' && (
-                <SafeComponent name="PrintLayoutView" props={{ formData, formatDate, duration: calculateDuration() }} />
             )}
         </div>
     );
