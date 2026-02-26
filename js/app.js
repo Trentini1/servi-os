@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V2.4 (Estável, Seguro e Anti-Cortes)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V2.5 (Estável, Seguro e Filiais Atualizadas)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -51,8 +51,27 @@ window.Icons = {
 };
 const Icons = window.Icons;
 
-// 3. DADOS ESTÁTICOS
-const SAAM_BRANCHES = [ "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Brasil S.A. - Santos", "SAAM Towage Brasil S.A. - Rio Grande", "SAAM Towage Brasil S.A. - Sepetiba", "SAAM Towage Brasil S.A. - Suape", "SAAM Towage Brasil S.A. - São Luís", "SAAM Towage Brasil S.A. - Salvador", "SAAM Towage Brasil S.A. - Vitória", "SAAM Towage Brasil S.A. - Navegantes", "SAAM Towage Brasil S.A. - São Francisco do Sul", "SAAM Towage Brasil S.A. - Paranaguá" ];
+// 3. DADOS ESTÁTICOS (Filiais Atualizadas!)
+const SAAM_BRANCHES = [ 
+    "SAAM Towage Brasil S.A. - Matriz (RJ)", 
+    "SAAM Towage Brasil S.A. - Santos", 
+    "SAAM Towage Brasil S.A. - Rio Grande", 
+    "SAAM Towage Brasil S.A. - Sepetiba", 
+    "SAAM Towage Brasil S.A. - Suape", 
+    "SAAM Towage Brasil S.A. - Salvador", 
+    "SAAM Towage Brasil S.A. - Vitória", 
+    "SAAM Towage Brasil S.A. - Navegantes", 
+    "SAAM Towage Brasil S.A. - São Francisco do Sul", 
+    "SAAM Towage Brasil S.A. - Paranaguá",
+    "SAAM Towage Brasil S.A. - Santana",
+    "SAAM Towage Brasil S.A. - Vila do Conde & Barcarena",
+    "SAAM Towage Brasil S.A. - Belém",
+    "SAAM Towage Brasil S.A. - São Luís-PDM",
+    "SAAM Towage Brasil S.A. - Itaqui & Alumar",
+    "SAAM Towage Brasil S.A. - Pecém",
+    "SAAM Towage Brasil S.A. - Macuripe (Fortaleza)"
+];
+
 const MAINTENANCE_TYPES = [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ];
 const ENGINE_POSITIONS = [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ];
 const PART_SOURCES = ["Retiblocos", "Cliente"];
@@ -139,7 +158,6 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
 };
 
 // FIX DO ERRO 130: Componente de Segurança para o Calendário
-// Se o calendar.js não carregar, ele intercepta o erro em vez de explodir o app
 const SafeCalendarComponent = (props) => {
     if (typeof window.CalendarView === 'function') {
         return React.createElement(window.CalendarView, props);
@@ -152,7 +170,6 @@ const SafeCalendarComponent = (props) => {
         </div>
     );
 };
-
 
 // --- APP PRINCIPAL ---
 function App() {
@@ -172,7 +189,7 @@ function App() {
     const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
     const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
 
-    const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
+    const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '', id: null });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
 
@@ -191,7 +208,7 @@ function App() {
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
     useEffect(() => { if (localStorage.getItem('hasSeenIntro')) setView('dashboard'); }, []);
 
-    // FIX DO TITULO E IMPRESSÃO FANTASMA: Se não estiver no formulário/preview, reseta o título.
+    // FIX DO TÍTULO E IMPRESSÃO FANTASMA
     useEffect(() => {
         if (view === 'form' || view === 'preview') {
             if (formData.vesselName) {
@@ -213,10 +230,17 @@ function App() {
         return auth.onAuthStateChanged(u => setUser(u));
     }, []);
 
+    // FIX DO FIREBASE: A leitura do banco agora obriga o 'id' a não ser sobrescrito pelo data()
     useEffect(() => {
         if (!user || !db) return;
-        const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports').orderBy('savedAt', 'desc').limit(50).onSnapshot(s => setReports(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-        const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules').orderBy('date', 'asc').onSnapshot(s => setSchedules(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports')
+            .orderBy('savedAt', 'desc').limit(50)
+            .onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+            
+        const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules')
+            .orderBy('date', 'asc')
+            .onSnapshot(s => setSchedules(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+            
         return () => { unsubReports(); unsubSchedules(); };
     }, [user]);
 
@@ -236,18 +260,38 @@ function App() {
         return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
     };
 
-    // --- LÓGICA DO APP (COM CUSTOM MODALS) ---
+    // --- LÓGICA DE AGENDAMENTO COM BUG CORRIGIDO ---
     const saveSchedule = async () => {
         if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data e o nome da embarcação.");
         try {
             const colRef = db.collection('artifacts').doc(appId).collection('schedules');
-            if (scheduleData.id) await colRef.doc(scheduleData.id).update(scheduleData); else await colRef.add(scheduleData);
-            setShowScheduleModal(false); setScheduleData({ date: '', vesselName: '', description: '' }); setSelectedDateEvents(null);
-            showAlert("Sucesso", scheduleData.id ? "Agendamento atualizado com sucesso!" : "Serviço agendado com sucesso!");
-        } catch(e) { showAlert("Erro", "Erro ao salvar agendamento."); }
+            
+            // Tira o ID null da jogada
+            const { id, ...dataToSave } = scheduleData;
+
+            if (scheduleData.id) {
+                await colRef.doc(scheduleData.id).update(dataToSave);
+                showAlert("Sucesso", "Agendamento atualizado com sucesso!");
+            } else {
+                await colRef.add(dataToSave);
+                showAlert("Sucesso", "Serviço agendado com sucesso!");
+            }
+            
+            setShowScheduleModal(false); 
+            setScheduleData({ date: '', vesselName: '', description: '', id: null }); 
+            setSelectedDateEvents(null); 
+        } catch(e) { 
+            console.error(e);
+            showAlert("Erro", "Erro ao salvar agendamento."); 
+        }
     };
 
     const deleteSchedule = (id) => {
+        if (!id) {
+            showAlert("Erro Fantasma", "Este evento está corrompido no banco de dados (ID nulo). Por favor, apague-o manualmente no Firebase.");
+            return;
+        }
+
         showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento permanentemente?", async () => {
             try { 
                 await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
@@ -271,6 +315,13 @@ function App() {
         if(e) e.stopPropagation();
         const safeData = { ...initialFormState, ...report };
         setFormData(safeData);
+        
+        // Força título do documento imediatamente
+        const vessel = safeData.vesselName ? safeData.vesselName.toUpperCase() : 'RELATORIO';
+        const pos = safeData.enginePosition ? safeData.enginePosition.toUpperCase() : 'GERAL';
+        const date = safeData.startDate || 'DATA';
+        document.title = `RB - ${vessel} - ${pos} - ${date}`;
+        
         setView('preview');
     };
 
@@ -285,6 +336,8 @@ function App() {
     
     const deleteReport = (e, id) => {
         if(e) e.stopPropagation();
+        if(!id) return showAlert("Erro", "ID do relatório inválido.");
+        
         showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => {
             try { 
                 await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); 
@@ -297,13 +350,28 @@ function App() {
     const saveToCloud = async (dataToSave = null, silent = false) => {
         if (!user) return showAlert("Aviso", "Conectando ao servidor. Tente novamente em alguns segundos.");
         if (!silent) setIsSaving(true);
+        
         const payload = dataToSave || formData;
+        // Limpa a sujeira
+        const { id, ...dataLimpa } = payload;
+        
         try {
-            const docData = { ...payload, savedAt: new Date().toISOString() };
+            const docData = { ...dataLimpa, savedAt: new Date().toISOString() };
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            if (jsonSize > 950000) { showAlert("Erro de Limite", "O texto do relatório está muito pesado. Tente reduzir a descrição."); if(!silent) setIsSaving(false); return false; }
+            
+            if (jsonSize > 950000) { 
+                showAlert("Erro de Limite", "O texto do relatório está muito pesado. Tente reduzir a descrição."); 
+                if(!silent) setIsSaving(false); 
+                return false; 
+            }
+            
             const colRef = db.collection('artifacts').doc(appId).collection('public_reports');
-            if (payload.id) { await colRef.doc(payload.id).update(docData); } else { const ref = await colRef.add(docData); setFormData(prev => ({ ...prev, id: ref.id })); }
+            if (payload.id) { 
+                await colRef.doc(payload.id).update(docData); 
+            } else { 
+                const ref = await colRef.add(docData); 
+                setFormData(prev => ({ ...prev, id: ref.id })); 
+            }
             if(!silent) showAlert("Sucesso", "Relatório salvo com sucesso na nuvem!");
             return true;
         } catch (e) { console.error(e); showAlert("Erro", "Erro crítico ao salvar."); return false; } 
@@ -338,6 +406,7 @@ function App() {
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
+    
     const finalizeReport = async (clientSig) => {
         const finalData = { ...formData, clientSignature: clientSig };
         setFormData(finalData);
@@ -345,6 +414,7 @@ function App() {
         setView('preview');
         if(!saved) showAlert("Aviso", "Não foi possível sincronizar na nuvem agora, mas o PDF pode ser gerado localmente.");
     };
+    
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
     const isFormValid = () => formData.vesselName && formData.technicianName;
@@ -516,7 +586,6 @@ function App() {
                 </div>
             )}
             
-            {/* MODAIS AQUI... */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
@@ -530,6 +599,7 @@ function App() {
                     </div>
                 </div>
             )}
+            
             {selectedDateEvents && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
@@ -553,8 +623,10 @@ function App() {
                     </div>
                 </div>
             )}
+            
             {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
+            
             {view === 'preview' && (
                 <div key="preview" className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
                     <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
@@ -571,8 +643,8 @@ function App() {
             {dialog.isOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
                     <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
-                        <div className={`p-4 border-b flex items-center gap-3 ${dialog.type === 'confirm' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : dialog.title === 'Erro' ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
-                            {dialog.type === 'confirm' ? <Icons.Alert size={20}/> : (dialog.title === 'Erro' || dialog.title.includes('Fatal') ? <Icons.Alert size={20}/> : <Icons.Check size={20}/>)}
+                        <div className={`p-4 border-b flex items-center gap-3 ${dialog.type === 'confirm' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : dialog.title === 'Erro' || dialog.title.includes('Fantasma') || dialog.title.includes('Crítico') ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
+                            {dialog.type === 'confirm' ? <Icons.Alert size={20}/> : (dialog.title === 'Erro' || dialog.title.includes('Fantasma') || dialog.title.includes('Crítico') ? <Icons.Alert size={20}/> : <Icons.Check size={20}/>)}
                             <h3 className="text-lg font-bold">{dialog.title}</h3>
                         </div>
                         <div className="p-6 text-slate-300 text-sm leading-relaxed">
@@ -586,7 +658,7 @@ function App() {
                             )}
                             <button 
                                 onClick={() => { if(dialog.onConfirm) dialog.onConfirm(); closeDialog(); }} 
-                                className={`px-5 py-2 rounded-lg font-bold text-white transition-colors shadow-lg ${dialog.type === 'confirm' ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-900/20' : dialog.title === 'Erro' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'}`}
+                                className={`px-5 py-2 rounded-lg font-bold text-white transition-colors shadow-lg ${dialog.type === 'confirm' ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-900/20' : dialog.title === 'Erro' || dialog.title.includes('Fantasma') || dialog.title.includes('Crítico') ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'}`}
                             >
                                 {dialog.type === 'confirm' ? 'Confirmar' : 'OK, Entendi'}
                             </button>
@@ -617,7 +689,6 @@ function App() {
                         <div className="p-2 border border-slate-200 rounded bg-slate-50/50 col-span-4"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Série</span><span className="block font-bold text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span></div>
                     </div>
                     
-                    {/* CORREÇÃO DO TEXTO CORTADO NA IMPRESSÃO: padding-right garantido e quebra forçada */}
                     <div className="space-y-4">
                         <div>
                             <h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3>
