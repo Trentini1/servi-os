@@ -6,19 +6,32 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
     const Icons = window.Icons; 
 
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [filter, setFilter] = useState('all'); // 'all', 'reports', 'schedules'
+    const [filter, setFilter] = useState('all'); 
     
-    // Dia de hoje zerado para comparação exata
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    // 1. Processa todos os eventos
+    // 1. Processa todos os eventos (AGORA LIDANDO COM ARRAYS DE DATAS DOS LAUDOS)
     const allEvents = useMemo(() => {
         const events = [];
         if (filter === 'all' || filter === 'reports') {
             reports.forEach(r => {
-                if (r.startDate) {
+                // SE É NO FORMATO NOVO COM MULTIPLOS DIAS
+                if (r.executionPeriods && r.executionPeriods.length > 0) {
+                    r.executionPeriods.forEach((period, pIndex) => {
+                        events.push({
+                            date: period.date,
+                            title: r.vesselName || 'S/N',
+                            time: `${period.startTime} - ${period.endTime}`,
+                            type: 'report',
+                            id: `${r.id}-${pIndex}`, // ID falso só pro grid não surtar
+                            data: r
+                        });
+                    });
+                } 
+                // RETROCOMPATIBILIDADE: LAUDOS VELHOS
+                else if (r.startDate) {
                     events.push({ 
                         date: r.startDate, 
                         title: r.vesselName || 'S/N', 
@@ -30,6 +43,7 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                 }
             });
         }
+        
         if (filter === 'all' || filter === 'schedules') {
             schedules.forEach(s => {
                 if (s.date) {
@@ -47,27 +61,23 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
         return events;
     }, [reports, schedules, filter]);
 
-    // 2. Lógica de navegação
     const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
     const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
     const goToToday = () => setCurrentDate(new Date());
 
-    // 3. Matemágica do Calendário (Para preencher o grid com 42 células perfeitas)
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 (Dom) a 6 (Sáb)
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
     const daysInPrevMonth = new Date(year, month, 0).getDate();
     
     const monthName = currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-    // 4. Renderização do Grid
     const renderDays = () => {
         const days = [];
-        const totalCells = 42; // 6 linhas de 7 dias (padrão de calendário)
+        const totalCells = 42; 
 
         for (let i = 0; i < totalCells; i++) {
-            // Dias do mês anterior
             if (i < firstDayOfMonth) {
                 const prevDay = daysInPrevMonth - firstDayOfMonth + i + 1;
                 days.push(
@@ -76,10 +86,11 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                     </div>
                 );
             } 
-            // Dias do mês atual
             else if (i >= firstDayOfMonth && i < firstDayOfMonth + daysInMonth) {
                 const day = i - firstDayOfMonth + 1;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                
+                // Pega os eventos desse dia específico
                 const dayEvents = allEvents.filter(e => e.date === dateStr);
                 const isToday = dateStr === todayStr;
 
@@ -92,7 +103,6 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                         `}
                     >
                         <div className="flex justify-between w-full items-start mb-1">
-                            {/* Bolinhas de preview se tiver evento (Mobile otimizado) */}
                             <div className="flex gap-0.5 mt-0.5 ml-0.5 flex-wrap w-2/3">
                                 {dayEvents.length > 0 && dayEvents.slice(0, 3).map((e, idx) => (
                                     <div key={idx} className={`w-1.5 h-1.5 rounded-full ${e.type === 'report' ? 'bg-green-400' : 'bg-[var(--rb-orange)]'}`}></div>
@@ -107,7 +117,6 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                             </span>
                         </div>
 
-                        {/* Lista de Eventos (Truncada visualmente) */}
                         <div className="flex flex-col gap-1 w-full flex-1 overflow-y-auto hidden-scrollbar">
                             {dayEvents.map((ev, idx) => (
                                 <div 
@@ -122,12 +131,10 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                             ))}
                         </div>
                         
-                        {/* Hover Overlay Invisível (pra clicar mais fácil) */}
                         <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-colors z-10 pointer-events-none"></div>
                     </div>
                 );
             } 
-            // Dias do próximo mês
             else {
                 const nextDay = i - (firstDayOfMonth + daysInMonth) + 1;
                 days.push(
@@ -143,29 +150,19 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
     return (
         <div className="space-y-4">
             
-            {/* CABEÇALHO DO CALENDÁRIO */}
             <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden">
                 <div className="flex flex-col sm:flex-row justify-between items-center p-4 gap-4 border-b border-slate-700 bg-slate-900/50">
-                    
-                    {/* Navegação Mês/Ano */}
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
                         <button onClick={prevMonth} className="p-2 bg-slate-800 hover:bg-slate-700 hover:text-[var(--rb-orange)] rounded-lg text-slate-300 transition-colors border border-slate-700"><Icons.ChevronLeft size={20}/></button>
                         <h2 className="text-xl font-bold text-white capitalize w-40 text-center">{monthName}</h2>
                         <button onClick={nextMonth} className="p-2 bg-slate-800 hover:bg-slate-700 hover:text-[var(--rb-orange)] rounded-lg text-slate-300 transition-colors border border-slate-700"><Icons.ChevronRight size={20}/></button>
                     </div>
 
-                    {/* Botões de Ação Rápida */}
                     <div className="flex gap-2 w-full sm:w-auto">
-                        <button 
-                            onClick={goToToday} 
-                            className="flex-1 sm:flex-none px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors uppercase tracking-wider"
-                        >
-                            Hoje
-                        </button>
+                        <button onClick={goToToday} className="flex-1 sm:flex-none px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors uppercase tracking-wider">Hoje</button>
                     </div>
                 </div>
 
-                {/* BARRA DE FILTROS */}
                 <div className="flex gap-2 p-3 bg-slate-800 overflow-x-auto hidden-scrollbar">
                     <button onClick={() => setFilter('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${filter === 'all' ? 'bg-[var(--rb-blue)] text-white border-[var(--rb-blue)] shadow-lg' : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700'}`}>Visão Geral</button>
                     <button onClick={() => setFilter('reports')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border flex items-center gap-2 ${filter === 'reports' ? 'bg-green-600 text-white border-green-600 shadow-lg shadow-green-900/20' : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700'}`}><Icons.Check size={12}/> Laudos Prontos</button>
@@ -173,9 +170,7 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                 </div>
             </div>
             
-            {/* GRID DO CALENDÁRIO */}
             <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-lg overflow-hidden">
-                {/* Cabeçalho dos Dias da Semana */}
                 <div className="grid grid-cols-7 border-b border-slate-700 bg-slate-900/80">
                     {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d, index) => (
                         <div key={d} className={`text-center py-2 text-[10px] sm:text-xs uppercase font-bold tracking-wider ${index === 0 || index === 6 ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -184,13 +179,11 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                     ))}
                 </div>
                 
-                {/* Células dos Dias */}
                 <div className="grid grid-cols-7 bg-slate-700 border-l border-b border-slate-700">
                     {renderDays()}
                 </div>
             </div>
 
-            {/* BOTÃO FLUTUANTE DE NOVO AGENDAMENTO */}
             <div className="pt-4 pb-10 sm:pb-4">
                 <button 
                     onClick={onAddSchedule} 
@@ -200,11 +193,7 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                 </button>
             </div>
 
-            {/* Hack para sumir com barra de rolagem onde não deve no grid flex */}
-            <style dangerouslySetInnerHTML={{__html: `
-                .hidden-scrollbar::-webkit-scrollbar { display: none; }
-                .hidden-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-            `}} />
+            <style dangerouslySetInnerHTML={{__html: `.hidden-scrollbar::-webkit-scrollbar { display: none; } .hidden-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}} />
         </div>
     );
 };
