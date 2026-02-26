@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V2.2
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V2.4 (Estável, Seguro e Anti-Cortes)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -7,18 +7,16 @@ const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
   projectId: "retiblocos-app",
-  storageBucket: "retiblocos-app.firebasestorage.app", // Seu bucket pago
+  storageBucket: "retiblocos-app.firebasestorage.app", 
   messagingSenderId: "509287186524",
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
 
-// Inicializa globalmente
 if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const auth = firebase ? firebase.auth() : null;
 const db = firebase ? firebase.firestore() : null;
-// Verifica se a função existe antes de chamar, evitando o crash fatal se o script faltar
 const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
@@ -27,7 +25,6 @@ const Icon = ({ path, size = 18, className = "" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
 );
 
-// MUDANÇA AQUI: Colocamos os Icons no window para o calendar.js ter acesso
 window.Icons = {
     ArrowLeft: (props) => <Icon {...props} path={<><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></>} />,
     Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />,
@@ -49,7 +46,8 @@ window.Icons = {
     Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
     Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
     Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
-    Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />
+    Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />,
+    Warning: (props) => <Icon {...props} path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>} />
 };
 const Icons = window.Icons;
 
@@ -140,9 +138,21 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
     );
 };
 
-// MUDANÇA AQUI: Apague toda aquela função "const CalendarView = ({ reports... })" gigante.
-// No lugar dela, você coloca apenas esta linha abaixo puxando a versão importada:
-const CalendarView = window.CalendarView;
+// FIX DO ERRO 130: Componente de Segurança para o Calendário
+// Se o calendar.js não carregar, ele intercepta o erro em vez de explodir o app
+const SafeCalendarComponent = (props) => {
+    if (typeof window.CalendarView === 'function') {
+        return React.createElement(window.CalendarView, props);
+    }
+    return (
+        <div className="p-6 bg-slate-800 border border-red-500 rounded-xl text-center shadow-xl">
+            <Icons.Warning size={40} className="text-red-500 mx-auto mb-3" />
+            <h3 className="text-red-400 font-bold text-lg mb-2">Erro de Carregamento</h3>
+            <p className="text-slate-300 text-sm">O módulo do calendário (<code>calendar.js</code>) não foi encontrado ou falhou ao iniciar.</p>
+        </div>
+    );
+};
+
 
 // --- APP PRINCIPAL ---
 function App() {
@@ -155,6 +165,13 @@ function App() {
     const [isPrinting, setIsPrinting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     
+    // --- ESTADO GLOBAL DE DIÁLOGOS CUSTOMIZADOS ---
+    const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
+    
+    const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
+    const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
+    const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
+
     const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
@@ -174,18 +191,21 @@ function App() {
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
     useEffect(() => { if (localStorage.getItem('hasSeenIntro')) setView('dashboard'); }, []);
 
-    // FORMATAR NOME DO ARQUIVO/PÁGINA (Com data segura)
+    // FIX DO TITULO E IMPRESSÃO FANTASMA: Se não estiver no formulário/preview, reseta o título.
     useEffect(() => {
-        if (formData.vesselName) {
-            const vessel = formData.vesselName.toUpperCase();
-            const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-            // Data bruta (YYYY-MM-DD), segura pra arquivo
-            const date = formData.startDate || 'DATA';
-            document.title = `RB - ${vessel} - ${pos} - ${date}`;
+        if (view === 'form' || view === 'preview') {
+            if (formData.vesselName) {
+                const vessel = formData.vesselName.toUpperCase();
+                const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
+                const date = formData.startDate || 'DATA';
+                document.title = `RB - ${vessel} - ${pos} - ${date}`;
+            } else {
+                document.title = "Novo Relatorio";
+            }
         } else {
             document.title = "Retiblocos System";
         }
-    }, [formData]);
+    }, [formData, view]);
 
     useEffect(() => {
         if(!auth) return;
@@ -202,12 +222,11 @@ function App() {
 
     const finishIntro = () => { localStorage.setItem('hasSeenIntro', 'true'); setView('dashboard'); };
 
-    // --- FUNÇÕES DE DATA ---
     const formatDate = (d) => {
         if(!d) return '--/--/----';
-        const parts = d.split('-'); // Quebra "2023-10-01" em ["2023", "10", "01"]
+        const parts = d.split('-'); 
         if(parts.length !== 3) return d;
-        return `${parts[2]}/${parts[1]}/${parts[0]}`; // Retorna "01/10/2023"
+        return `${parts[2]}/${parts[1]}/${parts[0]}`; 
     };
 
     const calculateDuration = () => {
@@ -217,46 +236,46 @@ function App() {
         return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
     };
 
-    // --- LÓGICA DO APP ---
+    // --- LÓGICA DO APP (COM CUSTOM MODALS) ---
     const saveSchedule = async () => {
-        if(!scheduleData.date || !scheduleData.vesselName) return alert("Preencha data e embarcação");
+        if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data e o nome da embarcação.");
         try {
             const colRef = db.collection('artifacts').doc(appId).collection('schedules');
             if (scheduleData.id) await colRef.doc(scheduleData.id).update(scheduleData); else await colRef.add(scheduleData);
             setShowScheduleModal(false); setScheduleData({ date: '', vesselName: '', description: '' }); setSelectedDateEvents(null);
-            alert(scheduleData.id ? "Atualizado!" : "Agendado!");
-        } catch(e) { alert("Erro ao salvar."); }
+            showAlert("Sucesso", scheduleData.id ? "Agendamento atualizado com sucesso!" : "Serviço agendado com sucesso!");
+        } catch(e) { showAlert("Erro", "Erro ao salvar agendamento."); }
     };
 
-    const deleteSchedule = async (id) => {
-        if(!confirm("Excluir agendamento?")) return;
-        try { await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); if(selectedDateEvents) setSelectedDateEvents(p => ({...p, events: p.events.filter(e => e.id !== id)})); } catch(e) { alert("Erro ao excluir."); }
+    const deleteSchedule = (id) => {
+        showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento permanentemente?", async () => {
+            try { 
+                await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
+                
+                // Fecha o modal de detalhes do dia se for o último evento do array
+                setSelectedDateEvents(prev => {
+                    if (!prev) return null;
+                    const newEvents = prev.events.filter(e => e.id !== id);
+                    return newEvents.length > 0 ? { ...prev, events: newEvents } : null;
+                });
+            } catch(e) { 
+                showAlert("Erro", "Falha ao excluir o agendamento."); 
+            }
+        });
     };
 
     const openEditSchedule = (s) => { setScheduleData(s); setShowScheduleModal(true); };
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
     
-    // CORREÇÃO CRÍTICA: Mescla os dados do relatório com o estado inicial para evitar campos undefined
     const openPreview = (e, report) => {
         if(e) e.stopPropagation();
-        
-        // Garante que campos opcionais (parts, photos) existam mesmo se vazios no banco
         const safeData = { ...initialFormState, ...report };
         setFormData(safeData);
-        
-        // Força título do documento imediatamente
-        const vessel = safeData.vesselName ? safeData.vesselName.toUpperCase() : 'RELATORIO';
-        const pos = safeData.enginePosition ? safeData.enginePosition.toUpperCase() : 'GERAL';
-        const date = safeData.startDate || 'DATA';
-        document.title = `RB - ${vessel} - ${pos} - ${date}`;
-        
         setView('preview');
     };
 
-    // CORREÇÃO: Sem delay para o Safari/PWA
     const handlePrint = () => { window.print(); };
 
-    // CORREÇÃO CRÍTICA: Mescla dados também na edição
     const editReport = (e, report) => { 
         if(e) e.stopPropagation(); 
         const safeData = { ...initialFormState, ...report };
@@ -264,34 +283,39 @@ function App() {
         setView('form'); 
     };
     
-    const deleteReport = async (e, id) => {
+    const deleteReport = (e, id) => {
         if(e) e.stopPropagation();
-        if (!confirm("Excluir?")) return;
-        try { await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
+        showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => {
+            try { 
+                await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); 
+            } catch (err) { 
+                showAlert("Erro", "Erro ao excluir o relatório."); 
+            }
+        });
     };
 
     const saveToCloud = async (dataToSave = null, silent = false) => {
-        if (!user) return alert("Conectando...");
+        if (!user) return showAlert("Aviso", "Conectando ao servidor. Tente novamente em alguns segundos.");
         if (!silent) setIsSaving(true);
         const payload = dataToSave || formData;
         try {
             const docData = { ...payload, savedAt: new Date().toISOString() };
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            if (jsonSize > 950000) { alert(`Texto muito longo. Reduza a descrição.`); if(!silent) setIsSaving(false); return false; }
+            if (jsonSize > 950000) { showAlert("Erro de Limite", "O texto do relatório está muito pesado. Tente reduzir a descrição."); if(!silent) setIsSaving(false); return false; }
             const colRef = db.collection('artifacts').doc(appId).collection('public_reports');
             if (payload.id) { await colRef.doc(payload.id).update(docData); } else { const ref = await colRef.add(docData); setFormData(prev => ({ ...prev, id: ref.id })); }
-            if(!silent) alert("Salvo!");
+            if(!silent) showAlert("Sucesso", "Relatório salvo com sucesso na nuvem!");
             return true;
-        } catch (e) { console.error(e); alert("Erro ao salvar."); return false; } 
+        } catch (e) { console.error(e); showAlert("Erro", "Erro crítico ao salvar."); return false; } 
         finally { if(!silent) setIsSaving(false); }
     };
 
     const handlePhotoUpload = async (e) => {
-        if (!storage) return alert("ERRO: Storage não configurado no HTML.");
+        if (!storage) return showAlert("Erro Crítico", "O Storage não foi configurado. O script no HTML está faltando.");
         if (e.target.files) {
             const files = Array.from(e.target.files);
             const remainingSlots = MAX_PHOTOS - formData.photos.length;
-            if (remainingSlots <= 0) return alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
+            if (remainingSlots <= 0) return showAlert("Aviso", `Você já atingiu o limite máximo de ${MAX_PHOTOS} fotos!`);
             setIsUploading(true);
             try {
                 const processedPhotos = await Promise.all(files.slice(0, remainingSlots).map(async (file) => {
@@ -304,7 +328,7 @@ function App() {
                     return { id: Date.now() + Math.random(), url: downloadUrl, caption: '' };
                 }));
                 setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
-            } catch (error) { console.error("Erro upload:", error); alert("Erro ao enviar imagem."); } 
+            } catch (error) { console.error("Erro upload:", error); showAlert("Erro de Conexão", "Não foi possível enviar a imagem para o servidor."); } 
             finally { setIsUploading(false); }
         }
     };
@@ -319,7 +343,7 @@ function App() {
         setFormData(finalData);
         const saved = await saveToCloud(finalData, true);
         setView('preview');
-        if(!saved) alert("Não foi possível sincronizar, mas o PDF pode ser gerado.");
+        if(!saved) showAlert("Aviso", "Não foi possível sincronizar na nuvem agora, mas o PDF pode ser gerado localmente.");
     };
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
@@ -336,8 +360,9 @@ function App() {
     const filteredReports = reports.filter(r => (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen relative">
             {view === 'intro' && <IntroAnimation onFinish={finishIntro} />}
+            
             {view === 'dashboard' && (
                 <div key="dashboard" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex justify-between items-center py-4">
@@ -380,12 +405,28 @@ function App() {
                     </div>
                 </div>
             )}
+            
             {view === 'calendar' && (
                 <div key="calendar" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex items-center gap-4 mb-4"><button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button><h1 className="text-xl font-bold text-white">Agenda de Serviços</h1></div>
-                    <CalendarView reports={reports} schedules={schedules} onDateClick={(date, events) => { if(events.length > 0) setSelectedDateEvents({ date, events }); else if(confirm(`Agendar serviço para ${formatDate(date)}?`)) { setScheduleData({...scheduleData, date, id: null}); setShowScheduleModal(true); } }} onAddSchedule={() => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} />
+                    {/* USO SEGURO DO COMPONENTE DO CALENDARIO */}
+                    <SafeCalendarComponent 
+                        reports={reports} 
+                        schedules={schedules} 
+                        onDateClick={(date, events) => { 
+                            if(events.length > 0) {
+                                setSelectedDateEvents({ date, events }); 
+                            } else {
+                                showConfirm("Agendar Serviço", `Deseja criar um agendamento para o dia ${formatDate(date)}?`, () => {
+                                    setScheduleData({...scheduleData, date, id: null}); setShowScheduleModal(true);
+                                });
+                            }
+                        }} 
+                        onAddSchedule={() => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
+                    />
                 </div>
             )}
+            
             {(view === 'form' || view === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -398,6 +439,7 @@ function App() {
                     </div>
                 </div>
             )}
+            
             {view === 'form' && (
                 <div key="form" className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
                      <div className="space-y-4">
@@ -464,7 +506,7 @@ function App() {
                             {formData.technicianSignature ? (
                                 <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-green-500">
                                     <div className="flex items-center gap-3"><div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white"><Icons.Check/></div><div><p className="text-green-400 font-bold text-sm uppercase">Relatório Assinado</p><p className="text-[10px] text-slate-400">Técnico confirmou.</p></div></div>
-                                    <button onClick={() => { if(confirm("Remover assinatura?")) setFormData({...formData, technicianSignature: null}); }} className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2">Remover/Corrigir</button>
+                                    <button onClick={() => showConfirm("Remover Assinatura", "Deseja remover a assinatura e desbloquear a edição do relatório?", () => setFormData({...formData, technicianSignature: null}))} className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2">Remover/Corrigir</button>
                                 </div>
                             ) : (
                                 <button disabled={!isFormValid() || isUploading} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid() && !isUploading ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>{isUploading ? <><Icons.Spinner/> Aguarde...</> : <><Icons.Pen size={20} /> Assinar e Finalizar</>}</button>
@@ -473,22 +515,24 @@ function App() {
                     </div>
                 </div>
             )}
+            
+            {/* MODAIS AQUI... */}
             {showScheduleModal && (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
+                <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
                         <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar' : 'Novo'} Agendamento</h3>
                         <div className="space-y-3">
-                            <input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
-                            <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
-                            <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
+                            <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
+                            <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
+                            <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
                         </div>
-                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-2 text-slate-400">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-2 bg-orange-600 text-white rounded font-bold">{scheduleData.id ? 'Atualizar' : 'Agendar'}</button></div>
+                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:bg-slate-700 rounded-lg transition-colors">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-lg font-bold shadow-lg shadow-orange-900/20">{scheduleData.id ? 'Atualizar' : 'Agendar'}</button></div>
                     </div>
                 </div>
             )}
             {selectedDateEvents && (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-800 rounded-xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
+                <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-800 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
                         <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
                             <h3 className="text-lg font-bold text-white capitalize">{formatDate(selectedDateEvents.date)}</h3>
                             <button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><Icons.ArrowLeft className="rotate-180"/></button>
@@ -522,53 +566,94 @@ function App() {
                     <div className="flex gap-4 w-full pt-4"><button onClick={startNewReport} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Novo Relatório</button><button onClick={() => setView('dashboard')} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Ir ao Início</button></div>
                 </div>
             )}
-            <div className="print-only print-container bg-white text-slate-900 relative">
-                <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
-                    <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
-                    <div className="text-right">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Nº Controle</div><div className="text-xl font-bold uppercase text-orange-600 leading-tight font-mono">{formData.controlNumber || '0000'}</div>
-                        <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div><div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
-                    </div>
-                </div>
-                <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
-                    <div><span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span><span className="font-bold text-slate-900 text-sm">{formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}</span></div>
-                    <div className="text-right"><span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span><div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-800"><span>{formatDate(formData.startDate)} {formData.startTime}</span><span className="text-orange-400">➜</span><span>{formatDate(formData.endDate)} {formData.endTime}</span></div><div className="text-[9px] font-bold text-orange-600 mt-0.5">Duração: {calculateDuration()}</div></div>
-                </div>
-                <div className="mb-4 grid grid-cols-4 gap-2 text-[10px]">
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Embarcação</span><span className="block font-bold text-slate-900 uppercase">{formData.vesselName}</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Motor</span><span className="block font-bold text-slate-900 uppercase">{formData.engineModel}</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Posição</span><span className="block font-bold text-slate-900 uppercase">{formData.enginePosition}</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Horímetro</span><span className="block font-bold text-slate-900 font-mono">{formData.runningHours} H</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50 col-span-4"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Série</span><span className="block font-bold text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span></div>
-                </div>
-
-                <div className="space-y-4">
-                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-left text-[11px] leading-snug whitespace-pre-wrap text-slate-900 pl-3 break-words w-full pr-2">{formData.tasksExecuted}</div></div>
-                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-left text-[11px] leading-snug whitespace-pre-wrap italic text-slate-700 pl-3 break-words w-full pr-2">{formData.notes}</p></div>)}
-                </div>
-
-                {formData.parts.length > 0 && (
-                    <div className="mt-4 break-inside-avoid">
-                        <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
-                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
-                    </div>
-                )}
-                {formData.photos.length > 0 && (
-                    <div className="mt-6">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Registro Fotográfico</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                            {formData.photos.map(p => (<div key={p.id} className="break-inside-avoid border border-slate-200 bg-white p-1 rounded shadow-sm"><div className="h-40 flex items-center justify-center overflow-hidden bg-slate-50 rounded mb-1"><img src={p.url} className="max-h-full max-w-full object-contain"/></div>{p.caption && <p className="text-[9px] font-bold text-slate-700 text-center uppercase leading-tight">{p.caption}</p>}</div>))}
+            
+            {/* SISTEMA DE MODAL CUSTOMIZADO */}
+            {dialog.isOpen && (
+                <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
+                        <div className={`p-4 border-b flex items-center gap-3 ${dialog.type === 'confirm' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : dialog.title === 'Erro' ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
+                            {dialog.type === 'confirm' ? <Icons.Alert size={20}/> : (dialog.title === 'Erro' || dialog.title.includes('Fatal') ? <Icons.Alert size={20}/> : <Icons.Check size={20}/>)}
+                            <h3 className="text-lg font-bold">{dialog.title}</h3>
+                        </div>
+                        <div className="p-6 text-slate-300 text-sm leading-relaxed">
+                            {dialog.message}
+                        </div>
+                        <div className="p-4 border-t border-slate-700 bg-slate-900/50 flex gap-3 justify-end">
+                            {dialog.type === 'confirm' && (
+                                <button onClick={closeDialog} className="px-5 py-2 rounded-lg font-bold text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                                    Cancelar
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => { if(dialog.onConfirm) dialog.onConfirm(); closeDialog(); }} 
+                                className={`px-5 py-2 rounded-lg font-bold text-white transition-colors shadow-lg ${dialog.type === 'confirm' ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-900/20' : dialog.title === 'Erro' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'}`}
+                            >
+                                {dialog.type === 'confirm' ? 'Confirmar' : 'OK, Entendi'}
+                            </button>
                         </div>
                     </div>
-                )}
-                <div className="mt-8 pt-4 border-t-2 border-slate-800 break-inside-avoid">
-                    <div className="grid grid-cols-2 gap-10">
-                        <div className="text-center">{formData.technicianSignature ? <img src={formData.technicianSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">{formData.technicianName}</p><p className="text-[8px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p></div></div>
-                        <div className="text-center">{formData.clientSignature ? <img src={formData.clientSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">Aprovação Cliente</p><p className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p></div></div>
-                    </div>
-                    <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - {formatDate(new Date().toISOString().split('T')[0])}</div>
                 </div>
-            </div>
+            )}
+
+            {/* O SEGREDO ESTÁ AQUI: SÓ RENDERIZA O PDF SE A TELA FOR DE PREVIEW */}
+            {view === 'preview' && (
+                <div className="print-only print-container bg-white text-slate-900 relative">
+                    <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
+                        <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
+                        <div className="text-right">
+                            <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Nº Controle</div><div className="text-xl font-bold uppercase text-orange-600 leading-tight font-mono">{formData.controlNumber || '0000'}</div>
+                            <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div><div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
+                        </div>
+                    </div>
+                    <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
+                        <div><span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span><span className="font-bold text-slate-900 text-sm">{formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}</span></div>
+                        <div className="text-right"><span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span><div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-800"><span>{formatDate(formData.startDate)} {formData.startTime}</span><span className="text-orange-400">➜</span><span>{formatDate(formData.endDate)} {formData.endTime}</span></div><div className="text-[9px] font-bold text-orange-600 mt-0.5">Duração: {calculateDuration()}</div></div>
+                    </div>
+                    <div className="mb-4 grid grid-cols-4 gap-2 text-[10px]">
+                        <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Embarcação</span><span className="block font-bold text-slate-900 uppercase">{formData.vesselName}</span></div>
+                        <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Motor</span><span className="block font-bold text-slate-900 uppercase">{formData.engineModel}</span></div>
+                        <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Posição</span><span className="block font-bold text-slate-900 uppercase">{formData.enginePosition}</span></div>
+                        <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Horímetro</span><span className="block font-bold text-slate-900 font-mono">{formData.runningHours} H</span></div>
+                        <div className="p-2 border border-slate-200 rounded bg-slate-50/50 col-span-4"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Série</span><span className="block font-bold text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span></div>
+                    </div>
+                    
+                    {/* CORREÇÃO DO TEXTO CORTADO NA IMPRESSÃO: padding-right garantido e quebra forçada */}
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3>
+                            <div className="text-left text-[11px] leading-snug whitespace-pre-wrap text-slate-900 pl-2 pr-6 sm:pr-8 box-border" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }}>{formData.tasksExecuted}</div>
+                        </div>
+                        {formData.notes && (
+                            <div>
+                                <h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3>
+                                <p className="text-left text-[11px] leading-snug whitespace-pre-wrap italic text-slate-700 pl-2 pr-6 sm:pr-8 box-border" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }}>{formData.notes}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {formData.parts.length > 0 && (
+                        <div className="mt-4 break-inside-avoid">
+                            <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
+                            <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold text-slate-900">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
+                        </div>
+                    )}
+                    {formData.photos.length > 0 && (
+                        <div className="mt-6">
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Registro Fotográfico</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                {formData.photos.map(p => (<div key={p.id} className="break-inside-avoid border border-slate-200 bg-white p-1 rounded shadow-sm"><div className="h-40 flex items-center justify-center overflow-hidden bg-slate-50 rounded mb-1"><img src={p.url} className="max-h-full max-w-full object-contain"/></div>{p.caption && <p className="text-[9px] font-bold text-slate-700 text-center uppercase leading-tight">{p.caption}</p>}</div>))}
+                            </div>
+                        </div>
+                    )}
+                    <div className="mt-8 pt-4 border-t-2 border-slate-800 break-inside-avoid">
+                        <div className="grid grid-cols-2 gap-10">
+                            <div className="text-center">{formData.technicianSignature ? <img src={formData.technicianSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">{formData.technicianName}</p><p className="text-[8px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p></div></div>
+                            <div className="text-center">{formData.clientSignature ? <img src={formData.clientSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">Aprovação Cliente</p><p className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p></div></div>
+                        </div>
+                        <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - {formatDate(new Date().toISOString().split('T')[0])}</div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
