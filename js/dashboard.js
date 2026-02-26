@@ -16,7 +16,6 @@ window.DashboardView = ({
     // Permissões Baseadas no Papel (RBAC)
     const isMaster = currentUser?.role === 'master';
     const isTech = currentUser?.role === 'tech' || isMaster;
-    const isClient = currentUser?.role === 'client';
 
     const handleLogout = () => {
         if(window.confirm("Deseja realmente sair do sistema?")) {
@@ -53,7 +52,7 @@ window.DashboardView = ({
                         <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm"><Icons.Pen size={28}/></div>
                         <div className="text-left">
                             <h2 className="font-black text-xl uppercase tracking-wide">Criar Novo Relatório</h2>
-                            <p className="text-orange-100 text-sm font-medium">Preencher OS, peças, horímetro e fotos</p>
+                            <p className="text-orange-100 text-sm font-medium">Preencher OS, peças, períodos e fotos</p>
                         </div>
                     </div>
                     <Icons.ArrowLeft className="rotate-180 opacity-50 group-hover:opacity-100 transition-all group-hover:translate-x-1" size={24}/>
@@ -78,7 +77,6 @@ window.DashboardView = ({
                     </div>
                 </div>
 
-                {/* BOTÃO EXCLUSIVO PARA O MASTER */}
                 {isMaster && (
                     <button onClick={() => setView('admin')} className="col-span-2 sm:col-span-1 bg-slate-800 p-4 rounded-2xl border border-purple-500/30 hover:border-purple-500 transition-all text-left group shadow-lg flex flex-col justify-between h-full relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/10 rounded-bl-full pointer-events-none"></div>
@@ -120,6 +118,15 @@ window.DashboardView = ({
 
                     {filteredReports.map(rep => {
                         const isSigned = !!rep.technicianSignature;
+                        
+                        // LÓGICA RETROCOMPATÍVEL PARA PEGAR A DATA PRINCIPAL
+                        const mainDateStr = (rep.executionPeriods && rep.executionPeriods.length > 0) 
+                            ? rep.executionPeriods[0].date 
+                            : rep.startDate;
+
+                        // Verifica se tem múltiplos dias
+                        const isMultiDay = rep.executionPeriods && rep.executionPeriods.length > 1;
+
                         return (
                             <div key={rep.id} onClick={(e) => isTech ? editReport(e, rep) : openPreview(e, rep)} className="bg-slate-800 p-1 rounded-2xl border border-slate-700 hover:border-slate-500 cursor-pointer group shadow-lg transition-all relative overflow-hidden">
                                 <div className={`h-1.5 w-full absolute top-0 left-0 ${isSigned ? 'bg-green-500' : 'bg-orange-500'}`}></div>
@@ -162,7 +169,10 @@ window.DashboardView = ({
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-300">
                                             <div className="text-slate-500"><Icons.Clock size={14}/></div>
-                                            <span className="font-mono">{formatDate(rep.startDate)}</span>
+                                            <span className="font-mono">
+                                                {formatDate(mainDateStr)}
+                                                {isMultiDay && <span className="text-[10px] text-orange-400 ml-1 font-bold">+{rep.executionPeriods.length - 1} dia(s)</span>}
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-300 col-span-2 pt-1 border-t border-slate-700/30 mt-1">
                                             <div className="text-slate-500"><Icons.Pen size={14}/></div>
@@ -170,7 +180,6 @@ window.DashboardView = ({
                                         </div>
                                     </div>
                                     
-                                    {/* Exibe quem criou o relatório */}
                                     {rep.createdByName && (
                                         <div className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-3 px-1 text-right">
                                             Autor: {rep.createdByName}
@@ -184,7 +193,6 @@ window.DashboardView = ({
                                             </button>
                                         )}
                                         
-                                        {/* Apenas Tech e Master podem Editar/Excluir */}
                                         {isTech && (
                                             <>
                                                 <button onClick={(e) => editReport(e, rep)} className="flex-1 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-blue-500/20 hover:border-blue-600">
