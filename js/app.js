@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V4.1 (Exorcizando Fantasmas)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V5.0 (Com Roteador Nativo e RBAC)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -124,7 +124,9 @@ const SafeComponent = ({ name, props }) => {
 
 // --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
-    const [view, setView] = useState('loading');
+    // ESTADO INTERNO (NÃO USE DIRETAMENTE PARA NAVEGAR)
+    const [rawView, setRawView] = useState('loading'); 
+    
     const [user, setUser] = useState(null);
     const [currentUserData, setCurrentUserData] = useState(null);
     
@@ -156,12 +158,42 @@ function App() {
 
     const [formData, setFormData] = useState(initialFormState);
 
+    // ==============================================================================
+    // A MÁGICA DE NAVEGAÇÃO (INTERCEPTADOR DO BOTÃO VOLTAR DO NAVEGADOR)
+    // ==============================================================================
+    
+    // Função oficial para mudar a tela (Atualiza o React E a URL do navegador)
+    const setView = (newView) => {
+        setRawView(newView);
+        // Cria um ponto na história do navegador (Ex: seusite.com/#dashboard)
+        window.history.pushState({ view: newView }, '', `#${newView}`);
+        window.scrollTo(0, 0); // Joga a tela pro topo
+    };
+
+    // Escuta ativamente quando o usuário clica no botão voltar do celular/navegador
+    useEffect(() => {
+        const handlePopState = (event) => {
+            // Se o navegador souber em qual tela a gente tava, volta pra ela
+            if (event.state && event.state.view) {
+                setRawView(event.state.view);
+            } else {
+                // Se o navegador se perder, a gente joga pro dashboard (ou pro login se tiver deslogado)
+                const fallback = window.auth?.currentUser ? 'dashboard' : 'auth';
+                setRawView(fallback);
+                window.history.replaceState({ view: fallback }, '', `#${fallback}`);
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
     // REMOVE O LOADING SCREEN NATIVO
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
     // FIX DO TÍTULO E IMPRESSÃO FANTASMA
     useEffect(() => {
-        if (view === 'form' || view === 'preview') {
+        if (rawView === 'form' || rawView === 'preview') {
             if (formData.vesselName) {
                 const vessel = formData.vesselName.toUpperCase();
                 const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
@@ -173,16 +205,15 @@ function App() {
         } else {
             document.title = "Retiblocos System";
         }
-    }, [formData, view]);
+    }, [formData, rawView]);
 
-    // O CÃO DE GUARDA (AUTENTICAÇÃO) - AGORA BLINDADO CONTRA SESSÃO ANÔNIMA
+    // O CÃO DE GUARDA (AUTENTICAÇÃO E ROTA INICIAL)
     useEffect(() => {
         if(!window.auth) return;
         
         const unsubscribe = window.auth.onAuthStateChanged(async (u) => {
             setUser(u);
             if (u) {
-                // EXORCISMO: Se você for um usuário anônimo (o fantasma), o sistema te expulsa imediatamente.
                 if (u.isAnonymous) {
                     await window.auth.signOut();
                     return;
@@ -198,15 +229,15 @@ function App() {
                     setCurrentUserData({ name: u.email, role: 'client' }); 
                 }
                 
-                if (!localStorage.getItem('hasSeenIntro')) {
-                    setView('intro');
-                } else {
-                    setView('dashboard');
-                }
+                // Define a rota inicial substituindo o histórico (pra não criar sujeira no voltar)
+                const targetView = !localStorage.getItem('hasSeenIntro') ? 'intro' : 'dashboard';
+                setRawView(targetView);
+                window.history.replaceState({ view: targetView }, '', `#${targetView}`);
             } else {
                 // Usuário Deslogado
                 setCurrentUserData(null);
-                setView('auth');
+                setRawView('auth');
+                window.history.replaceState({ view: 'auth' }, '', '#auth');
             }
         });
         
@@ -235,13 +266,6 @@ function App() {
         const parts = d.split('-'); 
         if(parts.length !== 3) return d;
         return `${parts[2]}/${parts[1]}/${parts[0]}`; 
-    };
-
-    const calculateDuration = () => {
-        const s = new Date(`${formData.startDate}T${formData.startTime}`);
-        const e = new Date(`${formData.endDate}T${formData.endTime}`);
-        const d = e - s; if(d < 0) return "--";
-        return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
     };
 
     // --- LÓGICA DE AGENDAMENTO ---
@@ -368,7 +392,7 @@ function App() {
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
-    if (view === 'loading') {
+    if (rawView === 'loading') {
         return (
             <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center">
                 <Icons.Spinner size={40} className="text-[var(--rb-orange)] mb-4" />
@@ -379,23 +403,23 @@ function App() {
 
     return (
         <div className="min-h-screen relative">
-            {/* ROTEADOR DE TELAS */}
-            {view === 'intro' && <IntroAnimation onFinish={finishIntro} />}
+            {/* ROTEADOR DE TELAS: Usando rawView ao invés de view para a renderização condicional */}
+            {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             
-            {view === 'auth' && <SafeComponent name="AuthView" props={{}} />}
+            {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
             
-            {view === 'dashboard' && (
+            {rawView === 'dashboard' && (
                 <SafeComponent 
                     name="DashboardView" 
                     props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} 
                 />
             )}
             
-            {view === 'admin' && (
+            {rawView === 'admin' && (
                 <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm }} />
             )}
             
-            {view === 'calendar' && (
+            {rawView === 'calendar' && (
                 <div key="calendar" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex items-center gap-4 mb-4">
                         <button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button>
@@ -416,20 +440,20 @@ function App() {
             )}
             
             {/* CABEÇALHO DO FORMULÁRIO/PREVIEW */}
-            {(view === 'form' || view === 'preview') && (
+            {(rawView === 'form' || rawView === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
                         <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><Icons.Home size={18} /><span className="text-xs font-bold uppercase hidden sm:inline">Início</span></button>
-                        <div className="flex items-center gap-2"><div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div><span className="font-bold text-sm text-white uppercase tracking-wider">{view === 'preview' ? 'Finalizado' : 'Edição'}</span></div>
+                        <div className="flex items-center gap-2"><div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div><span className="font-bold text-sm text-white uppercase tracking-wider">{rawView === 'preview' ? 'Finalizado' : 'Edição'}</span></div>
                         <div className="flex gap-2">
-                            {view === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving || isUploading} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"><Icons.Save size={18}/></button>}
-                            {view === 'preview' && <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200">Editar</button>}
+                            {rawView === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving || isUploading} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"><Icons.Save size={18}/></button>}
+                            {rawView === 'preview' && <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200">Editar</button>}
                         </div>
                     </div>
                 </div>
             )}
             
-            {view === 'form' && (
+            {rawView === 'form' && (
                 <SafeComponent 
                     name="ReportFormView"
                     props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName), showConfirm }} 
@@ -475,7 +499,19 @@ function App() {
                 </div>
             )}
             
-            {/* SISTEMA DE MODAL CUSTOMIZADO (ANTI-PREGUIÇA) */}
+            {/* ASSINATURAS */}
+            {rawView === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
+            {rawView === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
+            
+            {/* TELA DE SUCESSO E PDF */}
+            {rawView === 'preview' && (
+                <>
+                    <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint, isPrinting, shareData }} />
+                    <SafeComponent name="PrintLayoutView" props={{ formData, formatDate, duration: calculateDuration() }} />
+                </>
+            )}
+            
+            {/* SISTEMA DE MODAL CUSTOMIZADO */}
             {dialog.isOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
                     <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
