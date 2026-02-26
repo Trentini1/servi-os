@@ -1,8 +1,7 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V5.1 (Multi-Agendamento e Fix de Edição)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V5.2 (Exclusão em Lote e Faxina Avançada)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
-// 1. CONFIGURAÇÃO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -12,20 +11,14 @@ const firebaseConfig = {
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
 
-if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+if (typeof firebase !== 'undefined' && !firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
-// EXPORTANDO PARA O WINDOW (Para os outros arquivos conseguirem usar)
 window.auth = firebase ? firebase.auth() : null;
 window.db = firebase ? firebase.firestore() : null;
 const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
-// 2. ÍCONES (SVG) GLOBAIS
-const Icon = ({ path, size = 18, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
-);
+const Icon = ({ path, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
 
 window.Icons = {
     ArrowLeft: (props) => <Icon {...props} path={<><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></>} />,
@@ -49,11 +42,11 @@ window.Icons = {
     Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
     Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
     Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />,
-    Warning: (props) => <Icon {...props} path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>} />
+    Warning: (props) => <Icon {...props} path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>} />,
+    Layers: (props) => <Icon {...props} path={<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>} />
 };
 const Icons = window.Icons;
 
-// 3. CONSTANTES DO SISTEMA
 window.AppConstants = {
     SAAM_BRANCHES: [ 
         "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Brasil S.A. - Santos", "SAAM Towage Brasil S.A. - Rio Grande", 
@@ -69,7 +62,6 @@ window.AppConstants = {
     MAX_PHOTOS: 12
 };
 
-// 4. UTILITÁRIOS GLOBAIS
 const dataURLtoBlob = (dataurl) => {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1], bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
     while(n--){ u8arr[n] = bstr.charCodeAt(n); }
@@ -81,106 +73,72 @@ const compressImage = (file, quality = 0.6, maxWidth = 800) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
+            const img = new Image(); img.src = event.target.result;
             img.onload = () => {
                 const elem = document.createElement('canvas');
                 let width = img.width, height = img.height;
                 if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
                 elem.width = width; elem.height = height;
-                const ctx = elem.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
+                const ctx = elem.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
                 resolve(elem.toDataURL('image/jpeg', quality));
             };
         };
     });
 };
 
-// --- COMPONENTES NATIVOS DO APP ---
 const IntroAnimation = ({ onFinish }) => {
     useEffect(() => { const t = setTimeout(() => onFinish(), 2500); return () => clearTimeout(t); }, []);
     return (
         <div className="intro-overlay">
             <div className="intro-logo-container"><div className="intro-rb">RB</div></div>
-            <h1 className="intro-text">Retiblocos</h1>
-            <p className="intro-sub">SISTEMA DE GESTÃO TÉCNICA</p>
+            <h1 className="intro-text">Retiblocos</h1><p className="intro-sub">SISTEMA DE GESTÃO TÉCNICA</p>
         </div>
     );
 };
 
-const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
-    const canvasRef = useRef(null);
-    useEffect(() => {
-        window.scrollTo(0, 0); document.body.style.overflow = 'hidden'; 
-        const timer = setTimeout(() => {
-            const canvas = canvasRef.current; if (!canvas) return;
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
-            const ctx = canvas.getContext('2d'); ctx.scale(ratio, ratio);
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        }, 300);
-        return () => { document.body.style.overflow = 'auto'; clearTimeout(timer); };
-    }, []);
-    const getPos = (e) => { const r = canvasRef.current.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top }; };
-    const start = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); };
-    const move = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); };
-    return (
-        <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[70vh]">
-                <div className="bg-slate-100 p-4 border-b flex justify-between items-center shrink-0">
-                    <h3 className="text-slate-800 font-bold text-lg">{title}</h3>
-                    <button onClick={() => {const c=canvasRef.current;c.getContext('2d').clearRect(0,0,c.width,c.height);c.getContext('2d').beginPath();}} className="text-slate-500 hover:text-red-500 p-2"><Icons.Refresh /></button>
-                </div>
-                <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair touch-none">
-                    <canvas ref={canvasRef} className="w-full h-full block touch-none" onMouseDown={start} onMouseMove={move} onTouchStart={start} onTouchMove={move} />
-                    <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none text-slate-200 text-3xl font-black opacity-20 uppercase select-none">Assine Aqui</div>
-                </div>
-                <div className="bg-slate-50 p-4 border-t flex gap-3 shrink-0">
-                    <button onClick={onCancel} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-200 rounded-lg">Voltar</button>
-                    {onSkip && <button onClick={onSkip} className="flex-1 py-3 font-semibold text-orange-600 hover:bg-orange-50 rounded-lg flex items-center justify-center gap-1"><Icons.Skip size={16}/> Pular</button>}
-                    <button onClick={() => onSave(canvasRef.current.toDataURL())} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg">Confirmar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// COMPONENTE PARA RENDERIZAR OS MÓDULOS DE FORMA SEGURA
 const SafeComponent = ({ name, props }) => {
-    if (typeof window[name] === 'function') { 
-        return React.createElement(window[name], props); 
-    }
+    if (typeof window[name] === 'function') return React.createElement(window[name], props); 
     return (
         <div className="p-6 bg-slate-800 border border-red-500 rounded-xl text-center shadow-xl max-w-md mx-auto mt-10">
             <Icons.Warning size={40} className="text-red-500 mx-auto mb-3" />
             <h3 className="text-red-400 font-bold text-lg mb-2">Erro Crítico</h3>
-            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> não foi encontrado. Verifique se ele está no <code>index.html</code> ANTES do <code>app.js</code>.</p>
+            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> não foi encontrado.</p>
         </div>
     );
 };
 
-// --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
     const [rawView, setRawView] = useState('loading'); 
-    
     const [user, setUser] = useState(null);
     const [currentUserData, setCurrentUserData] = useState(null);
-    
     const [reports, setReports] = useState([]);
     const [schedules, setSchedules] = useState([]);
-    
     const [isSaving, setIsSaving] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     
-    const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
-    const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
-    const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
+    // --- ESTADO DE DIÁLOGO AVANÇADO (AGORA COM MÚLTIPLOS BOTÕES) ---
+    const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', buttons: [] });
+    
     const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
+    
+    const showAlert = (title, message) => setDialog({ 
+        isOpen: true, type: 'alert', title, message, 
+        buttons: [{ label: 'OK, Entendi', style: 'bg-blue-600 hover:bg-blue-500 text-white', onClick: closeDialog }] 
+    });
+    
+    const showConfirm = (title, message, onConfirm) => setDialog({ 
+        isOpen: true, type: 'confirm', title, message, 
+        buttons: [
+            { label: 'Cancelar', style: 'bg-transparent text-slate-400 hover:text-white', onClick: closeDialog },
+            { label: 'Confirmar', style: 'bg-orange-600 hover:bg-orange-500 text-white', onClick: () => { onConfirm(); closeDialog(); } }
+        ] 
+    });
 
-    // ADICIONADO O ENDDATE NO ESTADO DE AGENDAMENTO
-    const [scheduleData, setScheduleData] = useState({ date: '', endDate: '', vesselName: '', description: '', id: null });
+    // Função de Dialog Customizável (Usada para a Exclusão em Lote)
+    const showCustomDialog = (title, message, buttons) => setDialog({ isOpen: true, type: 'custom', title, message, buttons });
+
+    const [scheduleData, setScheduleData] = useState({ date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null });
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
 
@@ -195,9 +153,6 @@ function App() {
 
     const [formData, setFormData] = useState(initialFormState);
 
-    // ==============================================================================
-    // A MÁGICA DE NAVEGAÇÃO
-    // ==============================================================================
     const setView = (newView) => {
         setRawView(newView);
         window.history.pushState({ view: newView }, '', `#${newView}`);
@@ -206,15 +161,13 @@ function App() {
 
     useEffect(() => {
         const handlePopState = (event) => {
-            if (event.state && event.state.view) {
-                setRawView(event.state.view);
-            } else {
+            if (event.state && event.state.view) setRawView(event.state.view);
+            else {
                 const fallback = window.auth?.currentUser ? 'dashboard' : 'auth';
                 setRawView(fallback);
                 window.history.replaceState({ view: fallback }, '', `#${fallback}`);
             }
         };
-
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
@@ -223,222 +176,221 @@ function App() {
 
     useEffect(() => {
         if (rawView === 'form' || rawView === 'preview') {
-            if (formData.vesselName) {
-                const vessel = formData.vesselName.toUpperCase();
-                const pos = formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL';
-                const date = formData.startDate || 'DATA';
-                document.title = `RB - ${vessel} - ${pos} - ${date}`;
-            } else {
-                document.title = "Novo Relatorio";
-            }
-        } else {
-            document.title = "Retiblocos System";
-        }
+            document.title = formData.vesselName ? `RB - ${formData.vesselName.toUpperCase()} - ${formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL'} - ${formData.startDate || 'DATA'}` : "Novo Relatorio";
+        } else document.title = "Retiblocos System";
     }, [formData, rawView]);
 
     useEffect(() => {
         if(!window.auth) return;
-        
         const unsubscribe = window.auth.onAuthStateChanged(async (u) => {
             setUser(u);
             if (u) {
-                if (u.isAnonymous) {
-                    await window.auth.signOut();
-                    return;
-                }
-
+                if (u.isAnonymous) return await window.auth.signOut();
                 const doc = await window.db.collection('users').doc(u.uid).get();
                 if (doc.exists) {
-                    const userData = doc.data();
-                    setCurrentUserData(userData);
-                    initialFormState.technicianName = userData.name || '';
-                } else {
-                    setCurrentUserData({ name: u.email, role: 'client' }); 
-                }
+                    const userData = doc.data(); setCurrentUserData(userData); initialFormState.technicianName = userData.name || '';
+                } else setCurrentUserData({ name: u.email, role: 'client' }); 
                 
                 const targetView = !localStorage.getItem('hasSeenIntro') ? 'intro' : 'dashboard';
-                setRawView(targetView);
-                window.history.replaceState({ view: targetView }, '', `#${targetView}`);
+                setRawView(targetView); window.history.replaceState({ view: targetView }, '', `#${targetView}`);
             } else {
-                setCurrentUserData(null);
-                setRawView('auth');
-                window.history.replaceState({ view: 'auth' }, '', '#auth');
+                setCurrentUserData(null); setRawView('auth'); window.history.replaceState({ view: 'auth' }, '', '#auth');
             }
         });
-        
         return () => unsubscribe();
     }, []);
 
     useEffect(() => {
         if (!user || !window.db) return;
-        
-        const unsubReports = window.db.collection('artifacts').doc(appId).collection('public_reports')
-            .orderBy('savedAt', 'desc').limit(100)
-            .onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
-            
-        const unsubSchedules = window.db.collection('artifacts').doc(appId).collection('schedules')
-            .orderBy('date', 'asc')
-            .onSnapshot(s => setSchedules(s.docs.map(d => ({ ...d.data(), id: d.id }))));
-            
+        const unsubReports = window.db.collection('artifacts').doc(appId).collection('public_reports').orderBy('savedAt', 'desc').limit(100).onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+        const unsubSchedules = window.db.collection('artifacts').doc(appId).collection('schedules').orderBy('date', 'asc').onSnapshot(s => setSchedules(s.docs.map(d => ({ ...d.data(), id: d.id }))));
         return () => { unsubReports(); unsubSchedules(); };
     }, [user]);
 
     const finishIntro = () => { localStorage.setItem('hasSeenIntro', 'true'); setView('dashboard'); };
+    const formatDate = (d) => { if(!d) return '--/--/----'; const parts = d.split('-'); if(parts.length !== 3) return d; return `${parts[2]}/${parts[1]}/${parts[0]}`; };
 
-    const formatDate = (d) => {
-        if(!d) return '--/--/----';
-        const parts = d.split('-'); 
-        if(parts.length !== 3) return d;
-        return `${parts[2]}/${parts[1]}/${parts[0]}`; 
-    };
-
-    // ==============================================================================
-    // LÓGICA DE AGENDAMENTO (AGORA COM MULTI-DIAS E EDIÇÃO CORRIGIDA)
-    // ==============================================================================
+    // --- NOVA LÓGICA DE AGENDAMENTO (CRIAR LOTE) ---
     const saveSchedule = async () => {
         if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data inicial e o nome da embarcação.");
         
         try {
             const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
-            
-            // Dados brutos sem o ID e a endDate (que não precisam ir pro banco)
-            const baseData = {
-                vesselName: scheduleData.vesselName,
-                description: scheduleData.description
-            };
+            const baseData = { vesselName: scheduleData.vesselName, description: scheduleData.description };
 
             if (scheduleData.id) {
-                // SE É EDIÇÃO: Atualiza apenas o dia exato daquele ID.
-                await colRef.doc(scheduleData.id).update({
-                    ...baseData,
-                    date: scheduleData.date
-                });
+                await colRef.doc(scheduleData.id).update({ ...baseData, date: scheduleData.date });
                 showAlert("Sucesso", "Agendamento atualizado com sucesso!");
             } else {
-                // SE É CRIAÇÃO: Verifica se tem Data Final
                 if (scheduleData.endDate && scheduleData.endDate !== scheduleData.date) {
-                    // Força meio-dia para o maldito fuso horário não pular dia
                     let currDate = new Date(scheduleData.date + 'T12:00:00');
                     let lastDate = new Date(scheduleData.endDate + 'T12:00:00');
                     
-                    if (lastDate < currDate) return showAlert("Erro de Lógica", "A data final não pode ser antes da inicial, né amigão?");
+                    if (lastDate < currDate) return showAlert("Erro Lógico", "A data final precisa ser maior que a data inicial.");
                     
-                    const diffTime = Math.abs(lastDate - currDate);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                    
-                    if (diffDays > 60) return showAlert("Exagero", "Você está tentando agendar mais de 60 dias seguidos. Pare de loucura.");
+                    const diffDays = Math.ceil(Math.abs(lastDate - currDate) / (1000 * 60 * 60 * 24)); 
+                    if (diffDays > 60) return showAlert("Exagero", "Você não pode agendar mais de 60 dias seguidos para evitar sobrecarga.");
 
-                    // Criação em lote (Batch)
+                    // Cria um identificador único de lote para agrupar esses dias
+                    const newBatchId = 'LOTE_' + Date.now().toString();
+
                     const batch = window.db.batch();
                     while (currDate <= lastDate) {
                         const dateStr = currDate.toISOString().split('T')[0];
-                        const docRef = colRef.doc(); // Gera um ID novo pra cada dia
-                        batch.set(docRef, { ...baseData, date: dateStr });
+                        const docRef = colRef.doc(); 
+                        batch.set(docRef, { ...baseData, date: dateStr, batchId: newBatchId });
                         currDate.setDate(currDate.getDate() + 1);
                     }
                     await batch.commit();
-                    showAlert("Sucesso", `Foram criados agendamentos individuais para ${diffDays + 1} dias!`);
+                    showAlert("Sucesso", `Foram criados ${diffDays + 1} dias de agendamento agrupados em lote!`);
                 } else {
-                    // SE É SÓ UM DIA MESMO
-                    await colRef.add({ ...baseData, date: scheduleData.date });
+                    await colRef.add({ ...baseData, date: scheduleData.date, batchId: null });
                     showAlert("Sucesso", "Serviço agendado!");
                 }
             }
             
-            setShowScheduleModal(false); 
-            setScheduleData({ date: '', endDate: '', vesselName: '', description: '', id: null }); 
-            setSelectedDateEvents(null); 
-        } catch(e) { 
-            console.error(e);
-            showAlert("Erro", "Erro ao salvar agendamento."); 
-        }
+            setShowScheduleModal(false); setScheduleData({ date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null }); setSelectedDateEvents(null); 
+        } catch(e) { console.error(e); showAlert("Erro", "Erro ao salvar agendamento."); }
     };
 
-    // FUNÇÃO DE ABRIR A EDIÇÃO (LIMPANDO O LIXO DO CALENDÁRIO)
     const openEditSchedule = (evt) => {
-        // Pega só o que importa do evento que o calendário passou
-        setScheduleData({
-            id: evt.id,
-            date: evt.date || '',
-            endDate: '', // Na edição, a gente trava a data final (não dá pra editar blocos)
-            vesselName: evt.vesselName || '',
-            description: evt.description || ''
-        });
+        setScheduleData({ id: evt.id, date: evt.date || '', endDate: '', vesselName: evt.vesselName || '', description: evt.description || '', batchId: evt.batchId || null });
         setShowScheduleModal(true);
     };
 
+    // --- NOVA LÓGICA DE EXCLUSÃO (VERIFICA LOTE) ---
     const deleteSchedule = (id) => {
-        if (!id) return showAlert("Erro Fantasma", "Este evento está corrompido. Apague manualmente no Firebase.");
-        showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento?", async () => {
-            try { 
-                await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
-                setSelectedDateEvents(prev => {
-                    if (!prev) return null;
-                    const newEvents = prev.events.filter(e => e.id !== id);
-                    return newEvents.length > 0 ? { ...prev, events: newEvents } : null;
-                });
-            } catch(e) { showAlert("Erro", "Falha ao excluir o agendamento."); }
-        });
+        if (!id) return;
+        
+        // Puxa o objeto completo para saber se ele tem um batchId
+        const scheduleToDelete = schedules.find(s => s.id === id);
+        
+        if (scheduleToDelete && scheduleToDelete.batchId) {
+            // É UM LOTE!
+            showCustomDialog(
+                "Excluir Agendamento em Lote", 
+                "Este serviço faz parte de um agendamento de múltiplos dias. Você deseja apagar apenas a data selecionada ou todos os dias relacionados a este serviço?",
+                [
+                    {
+                        label: "Apagar Todo o Lote",
+                        style: "bg-red-600 hover:bg-red-500 text-white w-full sm:w-auto",
+                        onClick: async () => {
+                            closeDialog();
+                            try {
+                                // Puxa todos que tem esse batchId e apaga
+                                const querySnapshot = await window.db.collection('artifacts').doc(appId).collection('schedules').where('batchId', '==', scheduleToDelete.batchId).get();
+                                const batch = window.db.batch();
+                                querySnapshot.forEach(doc => batch.delete(doc.ref));
+                                await batch.commit();
+                                setSelectedDateEvents(null);
+                                showAlert("Faxina Feita", "Todos os agendamentos deste lote foram excluídos.");
+                            } catch(e) { showAlert("Erro", "Erro ao excluir o lote."); }
+                        }
+                    },
+                    {
+                        label: "Apagar Apenas Este Dia",
+                        style: "bg-orange-600 hover:bg-orange-500 text-white w-full sm:w-auto",
+                        onClick: async () => {
+                            closeDialog();
+                            try { 
+                                await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
+                                setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; });
+                            } catch(e) { showAlert("Erro", "Falha ao excluir."); }
+                        }
+                    },
+                    {
+                        label: "Cancelar",
+                        style: "bg-slate-700 hover:bg-slate-600 text-white w-full sm:w-auto",
+                        onClick: closeDialog
+                    }
+                ]
+            );
+        } else {
+            // É NORMAL
+            showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento?", async () => {
+                try { 
+                    await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
+                    setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; });
+                } catch(e) { showAlert("Erro", "Falha ao excluir o agendamento."); }
+            });
+        }
     };
 
-    // --- LÓGICA DE RELATÓRIOS ---
+    // --- A FAXINA DO MASTER (Limpa tudo do passado) ---
+    const purgeOldSchedules = () => {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        const oldOnes = schedules.filter(s => s.date < todayStr);
+        
+        if(oldOnes.length === 0) return showAlert("Tranquilo", "O seu calendário já está limpo. Não há agendamentos antigos.");
+
+        showCustomDialog(
+            "Faxina de Calendário",
+            `Encontramos ${oldOnes.length} agendamentos com datas anteriores a hoje. Você quer deletar permanentemente esse histórico? Isso não pode ser desfeito.`,
+            [
+                {
+                    label: "Sim, Excluir Tudo",
+                    style: "bg-red-600 hover:bg-red-500 text-white",
+                    onClick: async () => {
+                        closeDialog();
+                        try {
+                            // Firestore Batch aceita até 500 exclusões por vez. Super suficiente para agendamentos.
+                            const batch = window.db.batch();
+                            const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
+                            oldOnes.forEach(s => batch.delete(colRef.doc(s.id)));
+                            await batch.commit();
+                            showAlert("Sistema Limpo", "Todos os agendamentos do passado foram pulverizados.");
+                        } catch (e) {
+                            showAlert("Erro", "Falha ao executar a faxina.");
+                        }
+                    }
+                },
+                {
+                    label: "Deixa Como Está",
+                    style: "bg-slate-700 hover:bg-slate-600 text-white",
+                    onClick: closeDialog
+                }
+            ]
+        );
+    };
+
+    // --- RESTO DO CÓDIGO (RELATÓRIOS) ---
     const startNewReport = () => { setFormData(initialFormState); setView('form'); };
-    
-    const openPreview = (e, report) => {
-        if(e) e.stopPropagation();
-        const safeData = { ...initialFormState, ...report };
-        setFormData(safeData);
-        setView('preview');
-    };
-
-    const editReport = (e, report) => { 
-        if(e) e.stopPropagation(); 
-        const safeData = { ...initialFormState, ...report };
-        setFormData(safeData); 
-        setView('form'); 
-    };
+    const openPreview = (e, report) => { if(e) e.stopPropagation(); setFormData({ ...initialFormState, ...report }); setView('preview'); };
+    const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData({ ...initialFormState, ...report }); setView('form'); };
     
     const deleteReport = (e, id) => {
         if(e) e.stopPropagation();
-        if(!id) return showAlert("Erro", "ID do relatório inválido.");
+        if(!id) return;
         showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => {
-            try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } 
-            catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); }
+            try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); }
         });
     };
 
     const saveToCloud = async (dataToSave = null, silent = false) => {
-        if (!user) return showAlert("Aviso", "Conectando ao servidor. Tente novamente em alguns segundos.");
+        if (!user) return showAlert("Aviso", "Conectando ao servidor...");
         if (!silent) setIsSaving(true);
-        const payload = dataToSave || formData;
-        const { id, ...dataLimpa } = payload;
-        
-        dataLimpa.createdBy = user.uid;
-        dataLimpa.createdByName = currentUserData?.name || 'Desconhecido';
+        const payload = dataToSave || formData; const { id, ...dataLimpa } = payload;
+        dataLimpa.createdBy = user.uid; dataLimpa.createdByName = currentUserData?.name || 'Desconhecido';
         
         try {
             const docData = { ...dataLimpa, savedAt: new Date().toISOString() };
-            const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            if (jsonSize > 950000) { showAlert("Erro", "Texto muito pesado. Tente reduzir a descrição."); if(!silent) setIsSaving(false); return false; }
-            
+            if (new Blob([JSON.stringify(docData)]).size > 950000) { showAlert("Erro", "Texto muito pesado."); if(!silent) setIsSaving(false); return false; }
             const colRef = window.db.collection('artifacts').doc(appId).collection('public_reports');
-            if (payload.id) { await colRef.doc(payload.id).update(docData); } 
-            else { const ref = await colRef.add(docData); setFormData(prev => ({ ...prev, id: ref.id })); }
-            
-            if(!silent) showAlert("Sucesso", "Relatório salvo com sucesso na nuvem!");
+            if (payload.id) { await colRef.doc(payload.id).update(docData); } else { const ref = await colRef.add(docData); setFormData(p => ({ ...p, id: ref.id })); }
+            if(!silent) showAlert("Sucesso", "Relatório salvo!");
             return true;
-        } catch (e) { console.error(e); showAlert("Erro", "Erro crítico ao salvar."); return false; } 
-        finally { if(!silent) setIsSaving(false); }
+        } catch (e) { showAlert("Erro", "Erro crítico."); return false; } finally { if(!silent) setIsSaving(false); }
     };
 
-    // --- UPLOAD PARA O STORAGE ---
     const handlePhotoUpload = async (e) => {
-        if (!storage) return showAlert("Erro Crítico", "O Storage não foi configurado. O script no HTML está faltando.");
+        if (!storage) return showAlert("Erro Crítico", "Storage não configurado.");
         if (e.target.files) {
             const files = Array.from(e.target.files);
             const remainingSlots = window.AppConstants.MAX_PHOTOS - formData.photos.length;
-            if (remainingSlots <= 0) return showAlert("Aviso", `Você já atingiu o limite máximo de ${window.AppConstants.MAX_PHOTOS} fotos!`);
-            
+            if (remainingSlots <= 0) return showAlert("Aviso", `Limite de ${window.AppConstants.MAX_PHOTOS} fotos atingido.`);
             setIsUploading(true);
             try {
                 const processedPhotos = await Promise.all(files.slice(0, remainingSlots).map(async (file) => {
@@ -450,32 +402,11 @@ function App() {
                     const downloadUrl = await storageRef.getDownloadURL();
                     return { id: Date.now() + Math.random(), url: downloadUrl, caption: '' };
                 }));
-                setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
-            } catch (error) { console.error("Erro upload:", error); showAlert("Erro de Conexão", "Não foi possível enviar a imagem."); } 
-            finally { setIsUploading(false); }
+                setFormData(p => ({ ...p, photos: [...p.photos, ...processedPhotos] }));
+            } catch (error) { showAlert("Erro", "Falha no upload."); } finally { setIsUploading(false); }
         }
     };
     
-    const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
-    const finalizeReport = async (clientSig) => {
-        const finalData = { ...formData, clientSignature: clientSig };
-        setFormData(finalData);
-        const saved = await saveToCloud(finalData, true);
-        setView('preview');
-        if(!saved) showAlert("Aviso", "Não sincronizou na nuvem agora, mas o PDF pode ser gerado localmente.");
-    };
-    
-    const saveClientSig = (d) => finalizeReport(d);
-    const skipClientSig = () => finalizeReport(null);
-    const shareData = async () => {
-        const dataStr = JSON.stringify(formData, null, 2);
-        const safe = (t) => t ? t.replace(/[^a-z0-9]/gi, '_').toUpperCase() : 'X';
-        const fileName = `RB_${safe(formData.vesselName)}_${safe(formData.enginePosition)}_${formData.startDate}.json`;
-        const file = new File([dataStr], fileName, { type: 'application/json' });
-        if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
-        else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
-    };
-
     if (rawView === 'loading') {
         return (
             <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center">
@@ -487,21 +418,10 @@ function App() {
 
     return (
         <div className="min-h-screen relative">
-            {/* ROTEADOR DE TELAS */}
             {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
-            
             {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
-            
-            {rawView === 'dashboard' && (
-                <SafeComponent 
-                    name="DashboardView" 
-                    props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} 
-                />
-            )}
-            
-            {rawView === 'admin' && (
-                <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm }} />
-            )}
+            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} />}
+            {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules }} />}
             
             {rawView === 'calendar' && (
                 <div key="calendar" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
@@ -515,15 +435,14 @@ function App() {
                             reports, schedules, 
                             onDateClick: (date, events) => { 
                                 if(events.length > 0) setSelectedDateEvents({ date, events }); 
-                                else showConfirm("Agendar Serviço", `Criar agendamento para ${formatDate(date)}?`, () => { setScheduleData({date, endDate: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); });
+                                else setScheduleData({date, endDate: '', vesselName: '', description: '', id: null, batchId: null}), setShowScheduleModal(true);
                             },
-                            onAddSchedule: () => { setScheduleData({date: '', endDate: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }
+                            onAddSchedule: () => { setScheduleData({date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); }
                         }} 
                     />
                 </div>
             )}
             
-            {/* CABEÇALHO DO FORMULÁRIO/PREVIEW */}
             {(rawView === 'form' || rawView === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -537,18 +456,19 @@ function App() {
                 </div>
             )}
             
-            {rawView === 'form' && (
-                <SafeComponent 
-                    name="ReportFormView"
-                    props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName), showConfirm }} 
-                />
-            )}
+            {rawView === 'form' && <SafeComponent name="ReportFormView" props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName), showConfirm: showCustomDialog }} />}
             
-            {/* MODAL DE AGENDAMENTO (NOVO MULTI-DIAS) */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
-                        <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar' : 'Novo'} Agendamento</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                {scheduleData.id ? <Icons.Pen size={18}/> : <Icons.Plus size={18}/>} 
+                                {scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}
+                            </h3>
+                            {scheduleData.batchId && <span className="bg-purple-500/20 text-purple-400 text-[10px] px-2 py-0.5 rounded font-bold border border-purple-500/30 flex items-center gap-1" title="Faz parte de um Lote"><Icons.Layers size={12}/> Lote</span>}
+                        </div>
+
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
@@ -557,23 +477,13 @@ function App() {
                                 </div>
                                 <div>
                                     <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Final</label>
-                                    <input 
-                                        type="date" 
-                                        className={`w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm ${scheduleData.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        value={scheduleData.endDate} 
-                                        onChange={e => setScheduleData({...scheduleData, endDate: e.target.value})} 
-                                        disabled={!!scheduleData.id}
-                                        title={scheduleData.id ? "Apenas em novos agendamentos" : "Opcional"}
-                                    />
+                                    <input type="date" className={`w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm ${scheduleData.id ? 'opacity-50 cursor-not-allowed' : ''}`} value={scheduleData.endDate} onChange={e => setScheduleData({...scheduleData, endDate: e.target.value})} disabled={!!scheduleData.id} title={scheduleData.id ? "Apenas em novos agendamentos" : "Opcional. Preencha para criar múltiplos dias."} />
                                 </div>
                             </div>
                             <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
-                            <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
+                            <input type="text" placeholder="Descrição Rápida..." className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
                         </div>
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowScheduleModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:bg-slate-700 rounded-lg transition-colors">Cancelar</button>
-                            <button onClick={saveSchedule} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-lg font-bold shadow-lg shadow-orange-900/20">{scheduleData.id ? 'Atualizar' : 'Agendar'}</button>
-                        </div>
+                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:bg-slate-700 rounded-lg transition-colors">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-lg font-bold shadow-lg shadow-orange-900/20">{scheduleData.id ? 'Atualizar Dia' : 'Agendar'}</button></div>
                     </div>
                 </div>
             )}
@@ -590,23 +500,25 @@ function App() {
                             {selectedDateEvents.events.map((evt, idx) => (
                                 <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${evt.type === 'report' ? 'bg-green-900/20 border-green-500/30' : 'bg-orange-900/20 border-orange-500/30'}`}>
                                     <div className="overflow-hidden mr-3">
-                                        <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{evt.type === 'report' ? 'Realizado' : 'Agendado'}</span><span className="text-xs text-slate-400 font-mono">{evt.time}</span></div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{evt.type === 'report' ? 'Realizado' : 'Agendado'}</span>
+                                            {evt.batchId && <span className="text-[10px] font-bold text-purple-400 flex items-center gap-0.5"><Icons.Layers size={10}/> Lote</span>}
+                                            <span className="text-xs text-slate-400 font-mono hidden sm:inline">{evt.time}</span>
+                                        </div>
                                         <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>{evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
                                     </div>
                                     <div className="flex gap-2 shrink-0">{evt.type === 'schedule' ? (<><button onClick={() => {openEditSchedule(evt); setSelectedDateEvents(null);}} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button><button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button></>) : (<button onClick={() => { setSelectedDateEvents(null); openPreview(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>)}</div>
                                 </div>
                             ))}
                         </div>
-                        <div className="p-4 border-t border-slate-700 bg-slate-900/50"><button onClick={() => { setScheduleData({date: selectedDateEvents.date, endDate: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); setSelectedDateEvents(null); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"><Icons.Plus size={16}/> Adicionar Outro Agendamento</button></div>
+                        <div className="p-4 border-t border-slate-700 bg-slate-900/50"><button onClick={() => { setScheduleData({date: selectedDateEvents.date, endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); setSelectedDateEvents(null); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"><Icons.Plus size={16}/> Adicionar Outro Agendamento</button></div>
                     </div>
                 </div>
             )}
             
-            {/* ASSINATURAS */}
-            {rawView === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
+            {rawView === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={(d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); }} onCancel={() => setView('form')} />}
             {rawView === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
             
-            {/* TELA DE SUCESSO E PDF */}
             {rawView === 'preview' && (
                 <>
                     <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint: () => window.print(), isPrinting: false, shareData }} />
@@ -614,20 +526,24 @@ function App() {
                 </>
             )}
             
-            {/* SISTEMA DE MODAL CUSTOMIZADO */}
+            {/* O NOVO SISTEMA DE DIÁLOGO TURBINADO */}
             {dialog.isOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
                     <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
-                        <div className={`p-4 border-b flex items-center gap-3 ${dialog.type === 'confirm' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : dialog.title === 'Erro' || dialog.title.includes('Fantasma') || dialog.title.includes('Crítico') ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
-                            {dialog.type === 'confirm' ? <Icons.Alert size={20}/> : (dialog.title === 'Erro' || dialog.title.includes('Fantasma') || dialog.title.includes('Crítico') ? <Icons.Alert size={20}/> : <Icons.Check size={20}/>)}
+                        <div className={`p-4 border-b flex items-center gap-3 
+                            ${dialog.type === 'confirm' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : 
+                              dialog.type === 'custom' ? 'border-purple-500/30 bg-purple-500/10 text-purple-400' : 
+                              dialog.title.includes('Erro') || dialog.title.includes('Crítico') ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
+                            {dialog.type === 'custom' ? <Icons.Layers size={20}/> : dialog.type === 'confirm' || dialog.title.includes('Erro') ? <Icons.Alert size={20}/> : <Icons.Check size={20}/>}
                             <h3 className="text-lg font-bold">{dialog.title}</h3>
                         </div>
-                        <div className="p-6 text-slate-300 text-sm leading-relaxed">{dialog.message}</div>
-                        <div className="p-4 border-t border-slate-700 bg-slate-900/50 flex gap-3 justify-end">
-                            {dialog.type === 'confirm' && (<button onClick={closeDialog} className="px-5 py-2 rounded-lg font-bold text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">Cancelar</button>)}
-                            <button onClick={() => { if(dialog.onConfirm) dialog.onConfirm(); closeDialog(); }} className={`px-5 py-2 rounded-lg font-bold text-white transition-colors shadow-lg ${dialog.type === 'confirm' ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-900/20' : dialog.title === 'Erro' || dialog.title.includes('Fantasma') || dialog.title.includes('Crítico') ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'}`}>
-                                {dialog.type === 'confirm' ? 'Confirmar' : 'OK, Entendi'}
-                            </button>
+                        <div className="p-6 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{dialog.message}</div>
+                        <div className={`p-4 border-t border-slate-700 bg-slate-900/50 flex ${dialog.buttons.length > 2 ? 'flex-col gap-2' : 'justify-end gap-3'}`}>
+                            {dialog.buttons.map((btn, i) => (
+                                <button key={i} onClick={btn.onClick} className={`px-5 py-2.5 rounded-xl font-bold transition-all shadow-md ${btn.style}`}>
+                                    {btn.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
