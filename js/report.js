@@ -2,7 +2,7 @@
 
 const { useState } = React;
 
-// 1. TELA DO FORMULÁRIO
+// 1. TELA DO FORMULÁRIO (AGORA COM MÚLTIPLOS PERÍODOS)
 window.ReportFormView = ({ 
     formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid, showConfirm 
 }) => {
@@ -11,12 +11,38 @@ window.ReportFormView = ({
 
     const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
 
+    // Funções de Multi-Períodos
+    const addPeriod = () => {
+        // Pega a última data e joga pro dia seguinte automaticamente pra facilitar
+        const lastDate = formData.executionPeriods[formData.executionPeriods.length - 1]?.date || new Date().toISOString().split('T')[0];
+        const nextDate = new Date(lastDate + 'T12:00:00'); // T12 ignora o fuso
+        nextDate.setDate(nextDate.getDate() + 1);
+        const nextDateStr = nextDate.toISOString().split('T')[0];
+
+        setFormData(p => ({
+            ...p,
+            executionPeriods: [...p.executionPeriods, { id: Date.now(), date: nextDateStr, startTime: '08:00', endTime: '17:00' }]
+        }));
+    };
+
+    const updatePeriod = (id, field, value) => {
+        setFormData(p => ({
+            ...p,
+            executionPeriods: p.executionPeriods.map(ep => ep.id === id ? { ...ep, [field]: value } : ep)
+        }));
+    };
+
+    const removePeriod = (id) => {
+        if (formData.executionPeriods.length === 1) return; // Impede deletar o último
+        setFormData(p => ({ ...p, executionPeriods: p.executionPeriods.filter(ep => ep.id !== id) }));
+    };
+
+    // Funções de Peças e Fotos
     const addPart = () => { 
         if (!newPart.name) return; 
         setFormData(prev => ({ ...prev, parts: [...prev.parts, { ...newPart, id: Date.now() }] })); 
         setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); 
     };
-    
     const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
     const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
     const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
@@ -38,22 +64,55 @@ window.ReportFormView = ({
                 </div>
                 <div className="grid grid-cols-4 gap-2">{ENGINE_POSITIONS.map(p => (<button key={p.id} onClick={() => setFormData({...formData, enginePosition: p.label})} className={`py-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>{p.short}</button>))}</div>
             </div>
+            
             <div className="space-y-4">
                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Detalhes</h3>
                 <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>{MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
                 {formData.maintenanceType === 'Outros' && <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 mt-2" placeholder="Especifique..." value={formData.maintenanceTypeOther} onChange={e => setFormData({...formData, maintenanceTypeOther: e.target.value})} />}
-                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 grid grid-cols-2 gap-4">
-                    <div><label className="text-[10px] text-slate-400 font-bold uppercase">Início</label><input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} /><input type="time" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
-                    <div><label className="text-[10px] text-slate-400 font-bold uppercase">Fim</label><input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} /><input type="time" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
-                </div>
                 <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Nome do Técnico" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} />
             </div>
+
+            {/* O NOVO BLOCO DE MÚLTIPLOS DIAS DE TRABALHO */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                    <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider">Períodos de Execução</h3>
+                </div>
+                
+                {formData.executionPeriods && formData.executionPeriods.map((period, index) => (
+                    <div key={period.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-3 items-center relative group">
+                        {formData.executionPeriods.length > 1 && (
+                            <button onClick={() => removePeriod(period.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <Icons.Trash size={12}/>
+                            </button>
+                        )}
+                        <div className="flex-1">
+                            <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data</label>
+                            <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-xs text-white" value={period.date} onChange={e => updatePeriod(period.id, 'date', e.target.value)} />
+                        </div>
+                        <div className="w-20">
+                            <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Início</label>
+                            <input type="time" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-xs text-white" value={period.startTime} onChange={e => updatePeriod(period.id, 'startTime', e.target.value)} />
+                        </div>
+                        <div className="w-20">
+                            <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Fim</label>
+                            <input type="time" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-xs text-white" value={period.endTime} onChange={e => updatePeriod(period.id, 'endTime', e.target.value)} />
+                        </div>
+                    </div>
+                ))}
+                
+                <button onClick={addPeriod} className="w-full py-3 bg-slate-800 border border-dashed border-slate-600 text-slate-400 hover:text-orange-400 hover:border-orange-500 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 transition-all">
+                    <Icons.Plus size={14} /> Adicionar Dia de Trabalho
+                </button>
+            </div>
+
             <div className="space-y-4">
                 <label className="text-xs text-green-400 font-bold uppercase">1. Execução (Realizado)</label>
                 <textarea rows={6} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-green-500" placeholder="Descreva o serviço..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
                 <label className="text-xs text-blue-400 font-bold uppercase">2. Observações</label>
                 <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500" placeholder="Pendências..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
             </div>
+
+            {/* PEÇAS */}
             <div className="space-y-4">
                 <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2"><Icons.Box size={16}/> Peças</h3>
                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
@@ -66,8 +125,10 @@ window.ReportFormView = ({
                 </div>
                 {formData.parts.length > 0 && <div className="space-y-2">{formData.parts.map(part => (<div key={part.id} className="flex items-center justify-between bg-slate-800/50 p-2 rounded border border-slate-700/50"><div className="flex-1"><span className="font-bold text-sm text-slate-200">{part.qty}x {part.name}</span><span className={`block text-[10px] font-bold uppercase ${part.source === 'Retiblocos' ? 'text-orange-400' : 'text-blue-400'}`}>{part.source}</span></div><button onClick={() => removePart(part.id)} className="text-slate-500 hover:text-red-500 p-2"><Icons.Trash size={16}/></button></div>))}</div>}
             </div>
+
+            {/* FOTOS */}
             <div className="space-y-4">
-                <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center justify-between">
                     <span>Fotos</span>
                     <span className={`text-xs px-2 py-1 rounded ${formData.photos.length >= MAX_PHOTOS ? 'bg-red-900 text-red-200' : 'bg-slate-700 text-slate-300'}`}>{formData.photos.length}/{MAX_PHOTOS}</span>
                 </h3>
@@ -83,7 +144,7 @@ window.ReportFormView = ({
                 </div>
             </div>
             
-            {/* Barra de Ações (Fica presa embaixo) */}
+            {/* Barra de Ações */}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900/95 backdrop-blur border-t border-slate-700 z-40">
                 <div className="max-w-2xl mx-auto">
                     {formData.technicianSignature ? (
@@ -116,7 +177,7 @@ window.ReportPreviewView = ({ startNewReport, setView, handlePrint, isPrinting, 
     );
 };
 
-// 3. LAYOUT DE IMPRESSÃO (O PDF REAL)
+// 3. LAYOUT DE IMPRESSÃO (O PDF REAL - AGORA COM MÚLTIPLAS DATAS)
 window.PrintLayoutView = ({ formData, formatDate, duration }) => {
     return (
         <div className="print-only print-container bg-white text-slate-900 relative">
@@ -127,10 +188,29 @@ window.PrintLayoutView = ({ formData, formatDate, duration }) => {
                     <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div><div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch ? formData.branch.split(' - ')[0] : ''}</div>
                 </div>
             </div>
-            <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
-                <div><span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span><span className="font-bold text-slate-900 text-sm">{formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}</span></div>
-                <div className="text-right"><span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span><div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-800"><span>{formatDate(formData.startDate)} {formData.startTime}</span><span className="text-orange-400">➜</span><span>{formatDate(formData.endDate)} {formData.endTime}</span></div><div className="text-[9px] font-bold text-orange-600 mt-0.5">Duração: {duration}</div></div>
+            
+            <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-start justify-between">
+                <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span>
+                    <span className="font-bold text-slate-900 text-sm">{formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}</span>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                    <span className="text-[9px] uppercase font-bold text-slate-500 block mb-1">Períodos de Execução</span>
+                    
+                    {formData.executionPeriods && formData.executionPeriods.map(p => (
+                        <div key={p.id} className="flex items-center gap-2 text-[10px] font-mono font-bold text-slate-800 leading-tight">
+                            <span>{formatDate(p.date)}</span>
+                            <span className="text-orange-400">|</span>
+                            <span>{p.startTime} ➜ {p.endTime}</span>
+                        </div>
+                    ))}
+
+                    <div className="text-[9px] font-bold text-orange-600 mt-1 pt-1 border-t border-slate-300 w-full text-right">
+                        Horas Totais: {duration}
+                    </div>
+                </div>
             </div>
+            
             <div className="mb-4 grid grid-cols-4 gap-2 text-[10px]">
                 <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Embarcação</span><span className="block font-bold text-slate-900 uppercase">{formData.vesselName}</span></div>
                 <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Motor</span><span className="block font-bold text-slate-900 uppercase">{formData.engineModel}</span></div>
@@ -171,7 +251,7 @@ window.PrintLayoutView = ({ formData, formatDate, duration }) => {
                     <div className="text-center">{formData.technicianSignature ? <img src={formData.technicianSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">{formData.technicianName}</p><p className="text-[8px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p></div></div>
                     <div className="text-center">{formData.clientSignature ? <img src={formData.clientSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">Aprovação Cliente</p><p className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p></div></div>
                 </div>
-                <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - {formatDate(new Date().toISOString().split('T')[0])}</div>
+                <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - Emissão: {formatDate(new Date().toISOString().split('T')[0])}</div>
             </div>
         </div>
     );
