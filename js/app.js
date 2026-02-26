@@ -1,8 +1,8 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V3.0 (Arquitetura Modular)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V4.0 (Autenticação e Modularidade Completa)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
-// 1. CONFIGURAÇÃO FIREBASE E CONSTANTES
+// 1. CONFIGURAÇÃO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -12,14 +12,21 @@ const firebaseConfig = {
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
 
-if (typeof firebase !== 'undefined' && !firebase.apps.length) firebase.initializeApp(firebaseConfig);
-const auth = firebase ? firebase.auth() : null;
-const db = firebase ? firebase.firestore() : null;
+if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
+// EXPORTANDO PARA O WINDOW (Para os outros arquivos conseguirem usar)
+window.auth = firebase ? firebase.auth() : null;
+window.db = firebase ? firebase.firestore() : null;
 const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
-// 2. ÍCONES GLOBAIS (Disponíveis para os outros módulos)
-const Icon = ({ path, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
+// 2. ÍCONES (SVG) GLOBAIS
+const Icon = ({ path, size = 18, className = "" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+);
+
 window.Icons = {
     ArrowLeft: (props) => <Icon {...props} path={<><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></>} />,
     Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />,
@@ -89,7 +96,7 @@ const compressImage = (file, quality = 0.6, maxWidth = 800) => {
     });
 };
 
-// --- COMPONENTES AUXILIARES ---
+// --- COMPONENTES NATIVOS DO APP ---
 const IntroAnimation = ({ onFinish }) => {
     useEffect(() => { const t = setTimeout(() => onFinish(), 2500); return () => clearTimeout(t); }, []);
     return (
@@ -139,29 +146,34 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
     );
 };
 
-// Segurança para os componentes externos não quebrarem o App
+// COMPONENTE PARA RENDERIZAR OS MÓDULOS DE FORMA SEGURA (Previnindo o Erro 130)
 const SafeComponent = ({ name, props }) => {
-    if (typeof window[name] === 'function') { return React.createElement(window[name], props); }
+    if (typeof window[name] === 'function') { 
+        return React.createElement(window[name], props); 
+    }
     return (
         <div className="p-6 bg-slate-800 border border-red-500 rounded-xl text-center shadow-xl max-w-md mx-auto mt-10">
             <Icons.Warning size={40} className="text-red-500 mx-auto mb-3" />
             <h3 className="text-red-400 font-bold text-lg mb-2">Erro Crítico</h3>
-            <p className="text-slate-300 text-sm">O arquivo <code>{name}</code> não foi carregado corretamente. Verifique o index.html.</p>
+            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> ({name === 'AuthView' ? 'auth.js' : name === 'DashboardView' ? 'dashboard.js' : name === 'CalendarView' ? 'calendar.js' : name === 'AdminView' ? 'admin.js' : 'report.js'}) não foi encontrado. Verifique se ele está no <code>index.html</code> ANTES do <code>app.js</code>.</p>
         </div>
     );
 };
 
-// --- APP PRINCIPAL ---
+// --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
-    const [view, setView] = useState('intro');
+    const [view, setView] = useState('loading'); // Começa carregando a autenticação
     const [user, setUser] = useState(null);
+    const [currentUserData, setCurrentUserData] = useState(null);
+    
     const [reports, setReports] = useState([]);
     const [schedules, setSchedules] = useState([]);
+    
     const [isSaving, setIsSaving] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     
-    // --- DIÁLOGOS CUSTOMIZADOS ---
+    // --- ESTADO GLOBAL DE DIÁLOGOS CUSTOMIZADOS ---
     const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
     const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
     const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
@@ -182,8 +194,8 @@ function App() {
 
     const [formData, setFormData] = useState(initialFormState);
 
+    // REMOVE O LOADING SCREEN NATIVO DO HTML ASSIM QUE O REACT ASSUME
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
-    useEffect(() => { if (localStorage.getItem('hasSeenIntro')) setView('dashboard'); }, []);
 
     // FIX DO TÍTULO E IMPRESSÃO FANTASMA
     useEffect(() => {
@@ -201,20 +213,48 @@ function App() {
         }
     }, [formData, view]);
 
+    // O CÃO DE GUARDA (AUTENTICAÇÃO)
     useEffect(() => {
-        if(!auth) return;
-        auth.signInAnonymously().catch(console.error);
-        return auth.onAuthStateChanged(u => setUser(u));
+        if(!window.auth) return;
+        
+        const unsubscribe = window.auth.onAuthStateChanged(async (u) => {
+            setUser(u);
+            if (u) {
+                // Usuário logado: Busca as permissões dele
+                const doc = await window.db.collection('users').doc(u.uid).get();
+                if (doc.exists) {
+                    const userData = doc.data();
+                    setCurrentUserData(userData);
+                    initialFormState.technicianName = userData.name || '';
+                } else {
+                    setCurrentUserData({ name: u.email, role: 'client' }); 
+                }
+                
+                // Se ainda não viu a intro, mostra. Senão, vai pro dashboard
+                if (!localStorage.getItem('hasSeenIntro')) {
+                    setView('intro');
+                } else {
+                    setView('dashboard');
+                }
+            } else {
+                // Usuário Deslogado
+                setCurrentUserData(null);
+                setView('auth');
+            }
+        });
+        
+        return () => unsubscribe();
     }, []);
 
-    // LER DADOS DO FIREBASE
+    // LER DADOS DO FIREBASE (SÓ SE ESTIVER LOGADO)
     useEffect(() => {
-        if (!user || !db) return;
-        const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports')
-            .orderBy('savedAt', 'desc').limit(50)
+        if (!user || !window.db) return;
+        
+        const unsubReports = window.db.collection('artifacts').doc(appId).collection('public_reports')
+            .orderBy('savedAt', 'desc').limit(100)
             .onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
             
-        const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules')
+        const unsubSchedules = window.db.collection('artifacts').doc(appId).collection('schedules')
             .orderBy('date', 'asc')
             .onSnapshot(s => setSchedules(s.docs.map(d => ({ ...d.data(), id: d.id }))));
             
@@ -241,7 +281,7 @@ function App() {
     const saveSchedule = async () => {
         if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data e o nome da embarcação.");
         try {
-            const colRef = db.collection('artifacts').doc(appId).collection('schedules');
+            const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
             const { id, ...dataToSave } = scheduleData;
             if (scheduleData.id) { await colRef.doc(scheduleData.id).update(dataToSave); showAlert("Sucesso", "Agendamento atualizado com sucesso!"); } 
             else { await colRef.add(dataToSave); showAlert("Sucesso", "Serviço agendado com sucesso!"); }
@@ -253,7 +293,7 @@ function App() {
         if (!id) return showAlert("Erro Fantasma", "Este evento está corrompido. Apague manualmente no Firebase.");
         showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento?", async () => {
             try { 
-                await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
+                await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
                 setSelectedDateEvents(prev => {
                     if (!prev) return null;
                     const newEvents = prev.events.filter(e => e.id !== id);
@@ -286,7 +326,7 @@ function App() {
         if(e) e.stopPropagation();
         if(!id) return showAlert("Erro", "ID do relatório inválido.");
         showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => {
-            try { await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } 
+            try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } 
             catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); }
         });
     };
@@ -297,12 +337,16 @@ function App() {
         const payload = dataToSave || formData;
         const { id, ...dataLimpa } = payload;
         
+        // AUDITORIA: Salva quem criou a nota
+        dataLimpa.createdBy = user.uid;
+        dataLimpa.createdByName = currentUserData?.name || 'Desconhecido';
+        
         try {
             const docData = { ...dataLimpa, savedAt: new Date().toISOString() };
             const jsonSize = new Blob([JSON.stringify(docData)]).size;
             if (jsonSize > 950000) { showAlert("Erro", "Texto muito pesado. Tente reduzir a descrição."); if(!silent) setIsSaving(false); return false; }
             
-            const colRef = db.collection('artifacts').doc(appId).collection('public_reports');
+            const colRef = window.db.collection('artifacts').doc(appId).collection('public_reports');
             if (payload.id) { await colRef.doc(payload.id).update(docData); } 
             else { const ref = await colRef.add(docData); setFormData(prev => ({ ...prev, id: ref.id })); }
             
@@ -348,7 +392,6 @@ function App() {
     
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
-    const isFormValid = () => formData.vesselName && formData.technicianName;
     const shareData = async () => {
         const dataStr = JSON.stringify(formData, null, 2);
         const safe = (t) => t ? t.replace(/[^a-z0-9]/gi, '_').toUpperCase() : 'X';
@@ -358,20 +401,33 @@ function App() {
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
     };
 
+    if (view === 'loading') {
+        return (
+            <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center">
+                <Icons.Spinner size={40} className="text-[var(--rb-orange)] mb-4" />
+                <p className="text-slate-400 font-bold tracking-widest uppercase text-xs">Conectando ao Retiblocos...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen relative">
-            {/* TELA DE INTRODUÇÃO */}
+            {/* ROTEADOR DE TELAS */}
             {view === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             
-            {/* TELA INICIAL (DASHBOARD) - COMPONENTE SEPARADO */}
+            {view === 'auth' && <SafeComponent name="AuthView" props={{}} />}
+            
             {view === 'dashboard' && (
                 <SafeComponent 
                     name="DashboardView" 
-                    props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView }} 
+                    props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} 
                 />
             )}
             
-            {/* CALENDÁRIO - COMPONENTE SEPARADO */}
+            {view === 'admin' && (
+                <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm }} />
+            )}
+            
             {view === 'calendar' && (
                 <div key="calendar" className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex items-center gap-4 mb-4">
@@ -406,15 +462,14 @@ function App() {
                 </div>
             )}
             
-            {/* FORMULÁRIO - COMPONENTE SEPARADO */}
             {view === 'form' && (
                 <SafeComponent 
                     name="ReportFormView"
-                    props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: isFormValid(), showConfirm }} 
+                    props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName), showConfirm }} 
                 />
             )}
             
-            {/* MODAL DE AGENDAMENTO */}
+            {/* MODAL DE AGENDAMENTO E DETALHES DO DIA */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
@@ -429,7 +484,6 @@ function App() {
                 </div>
             )}
             
-            {/* MODAL EVENTOS DO DIA */}
             {selectedDateEvents && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
@@ -458,12 +512,11 @@ function App() {
             {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
             
-            {/* TELA DE SUCESSO - COMPONENTE SEPARADO */}
             {view === 'preview' && (
                 <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint, isPrinting, shareData }} />
             )}
             
-            {/* MODAIS CUSTOMIZADOS (ANTI-PREGUIÇA DO NAVEGADOR) */}
+            {/* SISTEMA DE MODAL CUSTOMIZADO (ANTI-PREGUIÇA) */}
             {dialog.isOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
                     <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
@@ -482,7 +535,7 @@ function App() {
                 </div>
             )}
 
-            {/* O PDF DE VERDADE - COMPONENTE SEPARADO */}
+            {/* O PDF DE VERDADE */}
             {view === 'preview' && (
                 <SafeComponent name="PrintLayoutView" props={{ formData, formatDate, duration: calculateDuration() }} />
             )}
