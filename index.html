@@ -20,7 +20,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-    <!-- A LINHA MÁGICA QUE FALTAVA ESTÁ AQUI EMBAIXO: -->
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
 
     <!-- 5. CSS Incorporado -->
@@ -32,7 +31,7 @@
         /* Cores da Marca */
         :root {
             --rb-blue: #004aad;
-            --rb-orange: #ff6600;
+            --rb-orange: #ea580c;
         }
 
         .text-rb-blue { color: var(--rb-blue); }
@@ -46,7 +45,7 @@
         
         /* Loading Screen (Fallback) */
         #loading-screen { position:fixed; inset:0; background:#0f172a; display:flex; justify-content:center; align-items:center; z-index:9999; transition: opacity 0.5s; }
-        .loader { width:48px; height:48px; border:5px solid #FFF; border-bottom-color:#ea580c; border-radius:50%; animation:rotation 1s linear infinite; }
+        .loader { width:48px; height:48px; border:5px solid #FFF; border-bottom-color:var(--rb-orange); border-radius:50%; animation:rotation 1s linear infinite; }
         @keyframes rotation{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
         /* --- ANIMAÇÃO DE INTRODUÇÃO (Abertura Épica) --- */
@@ -71,7 +70,7 @@
             font-family: 'Anton', sans-serif;
             font-size: 6rem;
             color: white;
-            background-color: #ea580c;
+            background-color: var(--rb-orange);
             width: 120px;
             height: 120px;
             display: flex;
@@ -143,6 +142,8 @@
             color: #94a3b8;
             text-transform: uppercase;
         }
+        .hidden-scrollbar::-webkit-scrollbar { display: none; }
+        .hidden-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
         /* --- AJUSTES DE IMPRESSÃO --- */
         @media print {
@@ -181,10 +182,14 @@
     <!-- Onde o App vai ser injetado -->
     <div id="root"></div>
 
-    <!-- 6. Lógica JS Separada (A ORDEM AQUI É VITAL!) -->
+    <!-- 6. Lógica JS Separada (A ORDEM AQUI É DE EXTREMA IMPORTÂNCIA) -->
+    <script type="text/babel" src="js/auth.js"></script>
+    <script type="text/babel" src="js/admin.js"></script>
     <script type="text/babel" src="js/calendar.js"></script>
     <script type="text/babel" src="js/dashboard.js"></script>
     <script type="text/babel" src="js/report.js"></script>
+    
+    <!-- O Cérebro Principal (Sempre por último) -->
     <script type="text/babel" src="js/app.js"></script>
 
 </body>
