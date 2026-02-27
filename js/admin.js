@@ -14,6 +14,7 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
 
     // Estados do Fechamento (Billing)
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // 'YYYY-MM'
+    const [selectedTech, setSelectedTech] = useState('all'); // 'all' ou nome do técnico
     const [hourlyRates, setHourlyRates] = useState({}); // Taxa R$/hora por técnico
 
     useEffect(() => {
@@ -58,45 +59,69 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
         return `${hours}h ${mins}min`;
     };
 
+    // Agora o billingData cria a lista geral E o extrato detalhado por laudo
     const billingData = useMemo(() => {
         if (!reports || reports.length === 0) return [];
         
-        // Agrupa por técnico
         const techMap = {};
 
         reports.forEach(report => {
             // Se for laudo velho, usa startDate. Se for novo, usa a primeira data do período.
             const mainDate = report.executionPeriods?.[0]?.date || report.startDate;
             
-            // Verifica se a data do laudo cai no mês selecionado
             if (mainDate && mainDate.startsWith(selectedMonth)) {
                 const techName = report.technicianName || report.createdByName || 'Desconhecido';
                 
                 if (!techMap[techName]) {
-                    techMap[techName] = { name: techName, totalDecimalHours: 0, reportCount: 0 };
+                    techMap[techName] = { name: techName, totalDecimalHours: 0, reportCount: 0, reportsList: [] };
                 }
                 
-                // Calcula as horas daquele laudo
                 let laudoHours = 0;
                 if (report.executionPeriods) {
                     laudoHours = calculateTotalDecimalHours(report.executionPeriods);
                 } else if (report.startDate) {
-                    // Fallback para laudo muito velho
                     const fakePeriod = [{date: report.startDate, startTime: report.startTime || '08:00', endTime: report.endTime || '17:00'}];
                     laudoHours = calculateTotalDecimalHours(fakePeriod);
                 }
 
                 techMap[techName].totalDecimalHours += laudoHours;
                 techMap[techName].reportCount += 1;
+                
+                // Salva os detalhes pra gente montar o extrato dele
+                techMap[techName].reportsList.push({
+                    id: report.id,
+                    date: mainDate,
+                    controlNumber: report.controlNumber || 'S/N',
+                    vesselName: report.vesselName || 'S/N',
+                    maintenanceType: report.maintenanceType || 'N/I',
+                    hours: laudoHours
+                });
             }
+        });
+
+        // Ordena os laudos de cada técnico por data
+        Object.values(techMap).forEach(tech => {
+            tech.reportsList.sort((a, b) => new Date(a.date) - new Date(b.date));
         });
 
         return Object.values(techMap).sort((a, b) => b.totalDecimalHours - a.totalDecimalHours);
     }, [reports, selectedMonth]);
 
+    // Lista de técnicos disponíveis no mês para popular o dropdown
+    const availableTechs = useMemo(() => billingData.map(t => t.name), [billingData]);
+
     const updateRate = (techName, rate) => {
         setHourlyRates(prev => ({ ...prev, [techName]: Number(rate) }));
     };
+
+    // Se o técnico selecionado não existe nos dados daquele mês, volta pro "all"
+    useEffect(() => {
+        if (selectedTech !== 'all' && !availableTechs.includes(selectedTech)) {
+            setSelectedTech('all');
+        }
+    }, [selectedMonth, availableTechs, selectedTech]);
+
+    const specificTechData = selectedTech !== 'all' ? billingData.find(t => t.name === selectedTech) : null;
 
     return (
         <div className="max-w-4xl mx-auto p-4 space-y-6 fade-in pb-20">
@@ -189,30 +214,51 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
                     
                     {/* Controles de Tela (Ocultos no PDF) */}
                     <div className="no-print bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-xl flex flex-col sm:flex-row gap-4 items-end justify-between">
-                        <div className="w-full sm:w-auto">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Mês de Referência</label>
-                            <input 
-                                type="month" 
-                                value={selectedMonth} 
-                                onChange={(e) => setSelectedMonth(e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-green-500 outline-none transition-colors"
-                            />
+                        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Mês Referência</label>
+                                <input 
+                                    type="month" 
+                                    value={selectedMonth} 
+                                    onChange={(e) => setSelectedMonth(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-green-500 outline-none transition-colors"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Visualização</label>
+                                <select 
+                                    value={selectedTech}
+                                    onChange={(e) => setSelectedTech(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-green-500 outline-none transition-colors"
+                                >
+                                    <option value="all">Resumo Geral (Todos)</option>
+                                    {availableTechs.map(tech => (
+                                        <option key={tech} value={tech}>Extrato: {tech}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                         <button onClick={() => window.print()} className="w-full sm:w-auto px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-900/30 transition-all">
-                            <Icons.Printer size={18}/> Imprimir PDF
+                            <Icons.Printer size={18}/> Imprimir Relatório
                         </button>
                     </div>
 
-                    {/* A PLANILHA QUE SERÁ IMPRESSA */}
+                    {/* ÁREA DE IMPRESSÃO */}
                     <div className="bg-white rounded-2xl p-6 sm:p-10 shadow-2xl text-slate-900 border-t-8 border-green-600 print-only-override">
+                        
+                        {/* CABEÇALHO DO DOCUMENTO IMPRESSO */}
                         <div className="flex justify-between items-start border-b-2 border-slate-200 pb-6 mb-6">
                             <div>
                                 <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Retiblocos</h1>
                                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">Gestão de Equipe Técnica</p>
                             </div>
                             <div className="text-right">
-                                <h2 className="text-xl font-bold text-green-700">FECHAMENTO</h2>
-                                <p className="text-sm text-slate-600 font-mono mt-1">{selectedMonth.split('-').reverse().join('/')}</p>
+                                <h2 className="text-xl font-bold text-green-700">
+                                    {selectedTech === 'all' ? 'FECHAMENTO MENSAL' : 'EXTRATO DE SERVIÇOS'}
+                                </h2>
+                                <p className="text-sm text-slate-600 font-mono mt-1 uppercase">
+                                    {selectedMonth.split('-').reverse().join('/')}
+                                </p>
                             </div>
                         </div>
 
@@ -220,7 +266,10 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
                             <div className="py-12 text-center text-slate-400 font-medium">
                                 Nenhum laudo registrado neste mês de referência.
                             </div>
-                        ) : (
+                        ) : selectedTech === 'all' ? (
+                            /* ========================================= */
+                            /* MODO: VISÃO GERAL (TODOS OS TÉCNICOS)     */
+                            /* ========================================= */
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -277,7 +326,82 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
                                     </tfoot>
                                 </table>
                             </div>
-                        )}
+                        ) : specificTechData ? (
+                            /* ========================================= */
+                            /* MODO: EXTRATO ESPECÍFICO (TÉCNICO ÚNICO)  */
+                            /* ========================================= */
+                            <div>
+                                {/* Info do Técnico */}
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Credenciado</p>
+                                        <h3 className="text-2xl font-black text-slate-800 uppercase">{specificTechData.name}</h3>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-6 mt-4 sm:mt-0">
+                                        <div className="text-right">
+                                            <p className="text-xs font-bold text-slate-400 uppercase">Horas Computadas</p>
+                                            <p className="text-xl font-bold font-mono text-blue-700">{formatDecimalHours(specificTechData.totalDecimalHours)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs font-bold text-slate-400 uppercase">Total a Pagar</p>
+                                            <div className="flex items-center gap-2">
+                                                <div className="no-print flex items-center justify-center gap-1 border-b border-slate-300 pb-0.5">
+                                                    <span className="text-slate-400 text-xs font-bold">R$/h</span>
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="0"
+                                                        value={hourlyRates[specificTechData.name] || ''}
+                                                        onChange={(e) => updateRate(specificTechData.name, e.target.value)}
+                                                        className="w-12 bg-transparent text-right font-bold text-slate-800 outline-none text-sm"
+                                                        title="Definir Valor da Hora"
+                                                    />
+                                                </div>
+                                                <p className="text-2xl font-black text-green-700 tracking-tight">
+                                                    {(specificTechData.totalDecimalHours * (hourlyRates[specificTechData.name] || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Lista Discriminada das OS */}
+                                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider border-b-2 border-slate-200 pb-2 mb-4">Detalhamento de Laudos ({specificTechData.reportCount})</h4>
+                                
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-800 text-white text-[10px] uppercase tracking-wider">
+                                                <th className="py-2 px-3 font-bold w-20">Data</th>
+                                                <th className="py-2 px-3 font-bold w-20">OS</th>
+                                                <th className="py-2 px-3 font-bold">Embarcação</th>
+                                                <th className="py-2 px-3 font-bold hidden sm:table-cell">Tipo de Serviço</th>
+                                                <th className="py-2 px-3 font-bold text-right w-24">Horas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-200">
+                                            {specificTechData.reportsList.map((rep) => (
+                                                <tr key={rep.id} className="hover:bg-slate-50 text-xs">
+                                                    <td className="py-3 px-3 text-slate-600 font-mono">{new Date(rep.date).toLocaleDateString('pt-BR').slice(0, 5)}</td>
+                                                    <td className="py-3 px-3 font-bold text-orange-600 font-mono">{rep.controlNumber}</td>
+                                                    <td className="py-3 px-3 font-bold text-slate-800 uppercase">{rep.vesselName}</td>
+                                                    <td className="py-3 px-3 text-slate-600 hidden sm:table-cell truncate max-w-[200px]">{rep.maintenanceType}</td>
+                                                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 bg-slate-50">
+                                                        {formatDecimalHours(rep.hours)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="border-t-2 border-slate-800 bg-slate-100">
+                                                <td colSpan="4" className="py-3 px-3 text-right font-black uppercase text-[10px]">Soma Exata</td>
+                                                <td className="py-3 px-3 text-right font-black font-mono text-blue-700">{formatDecimalHours(specificTechData.totalDecimalHours)}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : null}
 
                         <div className="mt-12 text-center text-[10px] text-slate-400 font-mono border-t border-slate-200 pt-4">
                             Relatório emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')} <br/>
@@ -290,7 +414,9 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
             <style dangerouslySetInnerHTML={{__html: `
                 @media print {
                     body { background: white !important; }
-                    .print-only-override { box-shadow: none !important; border-top: none !important; padding: 0 !important; }
+                    .print-only-override { box-shadow: none !important; border-top: none !important; padding: 0 !important; margin: 0 !important; }
+                    /* Força fundo colorido nas tabelas se o navegador permitir (para PDF ficar bonito) */
+                    table th { background-color: #1e293b !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 }
             `}} />
         </div>
