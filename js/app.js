@@ -1,8 +1,7 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) --- V6.1 (Blindado e Modular)
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V7.0 (Auto-Save e Passagem de Dados para Gestão)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
-// 1. CONFIGURAÇÃO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
@@ -19,7 +18,6 @@ window.db = firebase ? firebase.firestore() : null;
 const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
-// 2. ÍCONES
 const Icon = ({ path, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
 
 window.Icons = {
@@ -45,7 +43,9 @@ window.Icons = {
     Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
     Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />,
     Warning: (props) => <Icon {...props} path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>} />,
-    Layers: (props) => <Icon {...props} path={<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>} />
+    Layers: (props) => <Icon {...props} path={<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>} />,
+    Download: (props) => <Icon {...props} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
+    Money: (props) => <Icon {...props} path={<><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></>} />
 };
 
 window.AppConstants = {
@@ -91,19 +91,17 @@ const IntroAnimation = ({ onFinish }) => {
     return <div className="intro-overlay"><div className="intro-logo-container"><div className="intro-rb">RB</div></div><h1 className="intro-text">Retiblocos</h1><p className="intro-sub">SISTEMA DE GESTÃO TÉCNICA</p></div>;
 };
 
-// COMPONENTE PARA RENDERIZAR OS MÓDULOS DE FORMA SEGURA
 const SafeComponent = ({ name, props }) => {
     if (typeof window[name] === 'function') return React.createElement(window[name], props); 
     return (
         <div className="p-6 bg-slate-800 border border-red-500 rounded-xl text-center shadow-xl max-w-md mx-auto mt-10">
             <window.Icons.Warning size={40} className="text-red-500 mx-auto mb-3" />
             <h3 className="text-red-400 font-bold text-lg mb-2">Erro Crítico</h3>
-            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> não foi encontrado. Verifique a aba de Scripts.</p>
+            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> não foi encontrado.</p>
         </div>
     );
 };
 
-// --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
     const [rawView, setRawView] = useState('loading'); 
     const [user, setUser] = useState(null);
@@ -113,9 +111,7 @@ function App() {
     const [isSaving, setIsSaving] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     
-    // --- ESTADO DE DIÁLOGO AVANÇADO ---
     const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', buttons: [] });
-    
     const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
     const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, buttons: [{ label: 'OK, Entendi', style: 'bg-blue-600 hover:bg-blue-500 text-white', onClick: closeDialog }] });
     const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, buttons: [{ label: 'Cancelar', style: 'bg-transparent text-slate-400 hover:text-white', onClick: closeDialog }, { label: 'Confirmar', style: 'bg-orange-600 hover:bg-orange-500 text-white', onClick: () => { onConfirm(); closeDialog(); } }] });
@@ -125,7 +121,6 @@ function App() {
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
 
-    // NOVO ESTADO INICIAL (Múltiplos períodos de Execução em Array)
     const initialFormState = {
         controlNumber: '', branch: window.AppConstants.SAAM_BRANCHES[0], vesselName: '', enginePosition: '',
         engineModel: '', engineSerial: '', maintenanceType: window.AppConstants.MAINTENANCE_TYPES[0], maintenanceTypeOther: '',
@@ -138,8 +133,18 @@ function App() {
     const [formData, setFormData] = useState(initialFormState);
 
     // ==============================================================================
-    // A MÁGICA DE NAVEGAÇÃO E ROTAS
+    // A MÁGICA DO AUTO-SAVE (ANTI-BURRICE)
     // ==============================================================================
+    // A cada modificação no formulário (se não estiver vazio), salva um rascunho invisível
+    useEffect(() => {
+        if (rawView === 'form' && formData.vesselName !== undefined) {
+            // Só salva se o cara digitou pelo menos o nome do barco ou alguma execução
+            if (formData.vesselName.trim() !== '' || formData.tasksExecuted.trim() !== '') {
+                localStorage.setItem('rb_draft', JSON.stringify(formData));
+            }
+        }
+    }, [formData, rawView]);
+
     const setView = (newView) => {
         setRawView(newView);
         window.history.pushState({ view: newView }, '', `#${newView}`);
@@ -161,7 +166,6 @@ function App() {
 
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
-    // Atualiza o Título da Página dinamicamente
     useEffect(() => {
         if (rawView === 'form' || rawView === 'preview') {
             const firstDate = formData.executionPeriods?.[0]?.date || 'DATA';
@@ -169,7 +173,6 @@ function App() {
         } else document.title = "Retiblocos System";
     }, [formData, rawView]);
 
-    // O CÃO DE GUARDA (AUTENTICAÇÃO E PERMISSÕES)
     useEffect(() => {
         if(!window.auth) return;
         const unsubscribe = window.auth.onAuthStateChanged(async (u) => {
@@ -190,10 +193,9 @@ function App() {
         return () => unsubscribe();
     }, []);
 
-    // PUXAR DADOS DO FIREBASE
     useEffect(() => {
         if (!user || !window.db) return;
-        const unsubReports = window.db.collection('artifacts').doc(appId).collection('public_reports').orderBy('savedAt', 'desc').limit(100).onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+        const unsubReports = window.db.collection('artifacts').doc(appId).collection('public_reports').orderBy('savedAt', 'desc').limit(500).onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
         const unsubSchedules = window.db.collection('artifacts').doc(appId).collection('schedules').orderBy('date', 'asc').onSnapshot(s => setSchedules(s.docs.map(d => ({ ...d.data(), id: d.id }))));
         return () => { unsubReports(); unsubSchedules(); };
     }, [user]);
@@ -201,7 +203,6 @@ function App() {
     const finishIntro = () => { localStorage.setItem('hasSeenIntro', 'true'); setView('dashboard'); };
     const formatDate = (d) => { if(!d) return '--/--/----'; const parts = d.split('-'); if(parts.length !== 3) return d; return `${parts[2]}/${parts[1]}/${parts[0]}`; };
 
-    // --- NOVA CALCULADORA DE DURAÇÃO (Soma todos os blocos do Array) ---
     const calculateDuration = (periods) => {
         if (!periods || periods.length === 0) return "--";
         let totalMs = 0;
@@ -215,43 +216,28 @@ function App() {
         return `${hours}h ${mins}min`;
     };
 
-    // --- FUNÇÃO DE RETROCOMPATIBILIDADE (Transforma Laudo Velho em Novo) ---
     const applyRetrocompatibility = (report) => {
         let safeData = { ...initialFormState, ...report };
         if (safeData.startDate && (!safeData.executionPeriods || safeData.executionPeriods.length === 0)) {
-            safeData.executionPeriods = [{
-                id: Date.now(),
-                date: safeData.startDate,
-                startTime: safeData.startTime || '08:00',
-                endTime: safeData.endTime || '17:00'
-            }];
+            safeData.executionPeriods = [{ id: Date.now(), date: safeData.startDate, startTime: safeData.startTime || '08:00', endTime: safeData.endTime || '17:00' }];
         }
         return safeData;
     };
 
-    // ==============================================================================
-    // LÓGICA DE AGENDAMENTO (COM LOTE E MULTI-DIAS)
-    // ==============================================================================
-    const saveSchedule = async () => {
+    // --- AGENDAMENTOS ---
+    const saveSchedule = async () => { /* Mantido */
         if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data inicial e o nome da embarcação.");
-        
         try {
             const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
             const baseData = { vesselName: scheduleData.vesselName, description: scheduleData.description };
-
             if (scheduleData.id) {
-                await colRef.doc(scheduleData.id).update({ ...baseData, date: scheduleData.date });
-                showAlert("Sucesso", "Agendamento atualizado com sucesso!");
+                await colRef.doc(scheduleData.id).update({ ...baseData, date: scheduleData.date }); showAlert("Sucesso", "Agendamento atualizado!");
             } else {
                 if (scheduleData.endDate && scheduleData.endDate !== scheduleData.date) {
-                    let currDate = new Date(scheduleData.date + 'T12:00:00'); 
-                    let lastDate = new Date(scheduleData.endDate + 'T12:00:00');
-                    
+                    let currDate = new Date(scheduleData.date + 'T12:00:00'); let lastDate = new Date(scheduleData.endDate + 'T12:00:00');
                     if (lastDate < currDate) return showAlert("Erro Lógico", "A data final precisa ser maior que a data inicial.");
-                    
                     const diffDays = Math.ceil(Math.abs(lastDate - currDate) / (1000 * 60 * 60 * 24)); 
                     if (diffDays > 60) return showAlert("Exagero", "Você não pode agendar mais de 60 dias seguidos para evitar sobrecarga.");
-
                     const newBatchId = 'LOTE_' + Date.now().toString();
                     const batch = window.db.batch();
                     while (currDate <= lastDate) {
@@ -259,114 +245,88 @@ function App() {
                         batch.set(colRef.doc(), { ...baseData, date: dateStr, batchId: newBatchId });
                         currDate.setDate(currDate.getDate() + 1);
                     }
-                    await batch.commit(); 
-                    showAlert("Sucesso", `Foram criados ${diffDays + 1} dias de agendamento agrupados em lote!`);
+                    await batch.commit(); showAlert("Sucesso", `Foram criados ${diffDays + 1} dias de agendamento em lote!`);
                 } else {
-                    await colRef.add({ ...baseData, date: scheduleData.date, batchId: null }); 
-                    showAlert("Sucesso", "Serviço agendado!");
+                    await colRef.add({ ...baseData, date: scheduleData.date, batchId: null }); showAlert("Sucesso", "Serviço agendado!");
                 }
             }
-            setShowScheduleModal(false); 
-            setScheduleData({ date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null }); 
-            setSelectedDateEvents(null); 
+            setShowScheduleModal(false); setScheduleData({ date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null }); setSelectedDateEvents(null); 
         } catch(e) { console.error(e); showAlert("Erro", "Erro ao salvar agendamento."); }
     };
-
-    const openEditSchedule = (evt) => { 
-        setScheduleData({ id: evt.id, date: evt.date || '', endDate: '', vesselName: evt.vesselName || '', description: evt.description || '', batchId: evt.batchId || null }); 
-        setShowScheduleModal(true); 
-    };
-
-    const deleteSchedule = (id) => {
+    const openEditSchedule = (evt) => { setScheduleData({ id: evt.id, date: evt.date || '', endDate: '', vesselName: evt.vesselName || '', description: evt.description || '', batchId: evt.batchId || null }); setShowScheduleModal(true); };
+    const deleteSchedule = (id) => { /* Mantido */
         if (!id) return;
         const scheduleToDelete = schedules.find(s => s.id === id);
-        
         if (scheduleToDelete && scheduleToDelete.batchId) {
             showCustomDialog("Excluir Agendamento em Lote", "Este serviço faz parte de um lote. Apagar apenas este dia ou todo o lote?", [
                 { label: "Apagar Todo o Lote", style: "bg-red-600 hover:bg-red-500 text-white w-full sm:w-auto", onClick: async () => {
-                    closeDialog(); 
-                    try {
+                    closeDialog(); try {
                         const qs = await window.db.collection('artifacts').doc(appId).collection('schedules').where('batchId', '==', scheduleToDelete.batchId).get();
-                        const batch = window.db.batch(); 
-                        qs.forEach(doc => batch.delete(doc.ref)); 
-                        await batch.commit();
-                        setSelectedDateEvents(null); 
-                        showAlert("Faxina Feita", "Lote inteiro excluído com sucesso.");
+                        const batch = window.db.batch(); qs.forEach(doc => batch.delete(doc.ref)); await batch.commit();
+                        setSelectedDateEvents(null); showAlert("Faxina Feita", "Lote inteiro excluído.");
                     } catch(e) { showAlert("Erro", "Erro ao excluir o lote."); }
                 }},
                 { label: "Apagar Só Este Dia", style: "bg-orange-600 hover:bg-orange-500 text-white w-full sm:w-auto", onClick: async () => {
-                    closeDialog(); 
-                    try { 
-                        await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
-                        setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; }); 
-                    } catch(e) { showAlert("Erro", "Falha ao excluir."); }
+                    closeDialog(); try { await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; }); } catch(e) { showAlert("Erro", "Falha ao excluir."); }
                 }},
                 { label: "Cancelar", style: "bg-slate-700 hover:bg-slate-600 text-white w-full sm:w-auto", onClick: closeDialog }
             ]);
         } else {
             showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento?", async () => {
-                try { 
-                    await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); 
-                    setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; }); 
-                } catch(e) { showAlert("Erro", "Falha ao excluir."); }
+                try { await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; }); } catch(e) { showAlert("Erro", "Falha ao excluir."); }
             });
         }
     };
-
-    // A FAXINA DO MASTER (Varre tudo que já passou da data atual)
-    const purgeOldSchedules = () => {
-        const today = new Date();
-        today.setHours(0,0,0,0);
+    const purgeOldSchedules = () => { /* Mantido */
+        const today = new Date(); today.setHours(0,0,0,0);
         const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        
         const oldOnes = schedules.filter(s => s.date < todayStr);
-        
-        if(oldOnes.length === 0) return showAlert("Tranquilo", "O seu calendário já está limpo. Não há agendamentos do passado.");
-
-        showCustomDialog(
-            "Faxina de Calendário",
-            `Foram encontrados ${oldOnes.length} agendamentos com datas anteriores a hoje. Você quer deletar permanentemente esse histórico? Essa ação não pode ser desfeita.`,
-            [
-                {
-                    label: "Sim, Excluir Tudo",
-                    style: "bg-red-600 hover:bg-red-500 text-white",
-                    onClick: async () => {
-                        closeDialog();
-                        try {
-                            const batch = window.db.batch();
-                            const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
-                            oldOnes.forEach(s => batch.delete(colRef.doc(s.id)));
-                            await batch.commit();
-                            showAlert("Sistema Limpo", "Todos os agendamentos antigos foram pulverizados com sucesso.");
-                        } catch (e) {
-                            showAlert("Erro", "Falha ao executar a faxina do banco.");
-                        }
-                    }
-                },
-                {
-                    label: "Cancelar",
-                    style: "bg-slate-700 hover:bg-slate-600 text-white",
-                    onClick: closeDialog
-                }
-            ]
-        );
+        if(oldOnes.length === 0) return showAlert("Tranquilo", "O seu calendário já está limpo.");
+        showCustomDialog("Faxina de Calendário", `Encontrados ${oldOnes.length} agendamentos antigos. Deletar permanentemente?`, [
+            { label: "Sim, Excluir Tudo", style: "bg-red-600 hover:bg-red-500 text-white", onClick: async () => {
+                closeDialog(); try { const batch = window.db.batch(); const colRef = window.db.collection('artifacts').doc(appId).collection('schedules'); oldOnes.forEach(s => batch.delete(colRef.doc(s.id))); await batch.commit(); showAlert("Sistema Limpo", "Todos os agendamentos antigos foram pulverizados com sucesso."); } catch (e) { showAlert("Erro", "Falha ao executar a faxina."); }
+            }},
+            { label: "Cancelar", style: "bg-slate-700 hover:bg-slate-600 text-white", onClick: closeDialog }
+        ]);
     };
 
-    // --- LÓGICA DE RELATÓRIOS ---
-    const startNewReport = () => { setFormData(initialFormState); setView('form'); };
+    // --- LÓGICA DE RELATÓRIOS E RECUPERAÇÃO DE RASCUNHO ---
+    const startNewReport = () => {
+        const draft = localStorage.getItem('rb_draft');
+        if (draft) {
+            try {
+                const parsedDraft = JSON.parse(draft);
+                // Verifica se o rascunho tem algum dado minimamente útil
+                if (parsedDraft.vesselName || parsedDraft.tasksExecuted) {
+                    showCustomDialog(
+                        "Rascunho Encontrado", 
+                        "Você tem um relatório que não foi finalizado. Deseja continuar de onde parou ou apagar e começar do zero?", 
+                        [
+                            { 
+                                label: "Recuperar Rascunho", 
+                                style: "bg-blue-600 hover:bg-blue-500 text-white w-full sm:w-auto", 
+                                onClick: () => { setFormData(parsedDraft); setView('form'); closeDialog(); } 
+                            },
+                            { 
+                                label: "Descartar e Começar Novo", 
+                                style: "bg-red-600 hover:bg-red-500 text-white w-full sm:w-auto", 
+                                onClick: () => { localStorage.removeItem('rb_draft'); setFormData({ ...initialFormState, technicianName: currentUserData?.name || '' }); setView('form'); closeDialog(); } 
+                            }
+                        ]
+                    );
+                    return; // Trava a execução aqui para esperar a resposta do usuário
+                }
+            } catch (e) { console.error("Rascunho corrompido"); }
+        }
+        
+        // Se não tiver rascunho, só abre limpo
+        setFormData({ ...initialFormState, technicianName: currentUserData?.name || '' }); 
+        setView('form'); 
+    };
     
-    // As funções agora APLICAM A RETROCOMPATIBILIDADE antes de abrir
     const openPreview = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('preview'); };
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('form'); };
-    
-    const deleteReport = (e, id) => { 
-        if(e) e.stopPropagation(); 
-        if(!id) return; 
-        showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => { 
-            try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } 
-            catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); } 
-        }); 
-    };
+    const deleteReport = (e, id) => { if(e) e.stopPropagation(); if(!id) return; showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => { try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); } }); };
 
     const saveToCloud = async (dataToSave = null, silent = false) => {
         if (!user) return showAlert("Aviso", "Conectando ao servidor. Aguarde...");
@@ -385,52 +345,39 @@ function App() {
             if (payload.id) { await colRef.doc(payload.id).update(docData); } 
             else { const ref = await colRef.add(docData); setFormData(p => ({ ...p, id: ref.id })); }
             
+            // LIMPA O RASCUNHO DA MEMÓRIA POIS JÁ SALVOU NA NUVEM!
+            localStorage.removeItem('rb_draft');
+
             if(!silent) showAlert("Sucesso", "Relatório salvo com sucesso na nuvem!"); 
             return true;
         } catch (e) { showAlert("Erro", "Erro crítico ao tentar salvar."); return false; } 
         finally { if(!silent) setIsSaving(false); }
     };
 
-    // --- UPLOAD PARA O STORAGE ---
     const handlePhotoUpload = async (e) => {
         if (!storage) return showAlert("Erro Crítico", "Sistema de Storage não foi inicializado.");
         if (e.target.files) {
-            const files = Array.from(e.target.files); 
-            const remaining = window.AppConstants.MAX_PHOTOS - formData.photos.length;
+            const files = Array.from(e.target.files); const remaining = window.AppConstants.MAX_PHOTOS - formData.photos.length;
             if (remaining <= 0) return showAlert("Aviso", `Você já atingiu o limite de ${window.AppConstants.MAX_PHOTOS} fotos.`);
-            
             setIsUploading(true);
             try {
                 const processed = await Promise.all(files.slice(0, remaining).map(async (f) => {
-                    const comp = await compressImage(f, 0.6, 800); 
-                    const blob = dataURLtoBlob(comp);
+                    const comp = await compressImage(f, 0.6, 800); const blob = dataURLtoBlob(comp);
                     const name = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-                    const ref = storage.ref().child(`images/${name}`); 
-                    await ref.put(blob);
-                    const url = await ref.getDownloadURL(); 
-                    return { id: Date.now() + Math.random(), url, caption: '' };
+                    const ref = storage.ref().child(`images/${name}`); await ref.put(blob);
+                    const url = await ref.getDownloadURL(); return { id: Date.now() + Math.random(), url, caption: '' };
                 }));
                 setFormData(p => ({ ...p, photos: [...p.photos, ...processed] }));
-            } catch (err) { showAlert("Erro", "Falha no envio das imagens."); } 
-            finally { setIsUploading(false); }
+            } catch (err) { showAlert("Erro", "Falha no envio das imagens."); } finally { setIsUploading(false); }
         }
     };
     
-    // --- FINALIZAÇÃO E COMPARTILHAMENTO ---
+    const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
+    const finalizeReport = async (clientSig) => { const finalData = { ...formData, clientSignature: clientSig }; setFormData(finalData); const saved = await saveToCloud(finalData, true); setView('preview'); if(!saved) showAlert("Aviso", "Não foi possível sincronizar no servidor, mas o PDF está liberado para impressão local."); };
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
-    const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
-    const finalizeReport = async (clientSig) => { 
-        const finalData = { ...formData, clientSignature: clientSig }; 
-        setFormData(finalData); 
-        const saved = await saveToCloud(finalData, true); 
-        setView('preview'); 
-        if(!saved) showAlert("Aviso", "Não foi possível sincronizar no servidor, mas o PDF está liberado para impressão local."); 
-    };
-    
     const shareData = async () => {
-        const dataStr = JSON.stringify(formData, null, 2);
-        const dateStr = formData.executionPeriods?.[0]?.date || 'DATA';
+        const dataStr = JSON.stringify(formData, null, 2); const dateStr = formData.executionPeriods?.[0]?.date || 'DATA';
         const file = new File([dataStr], `RB_${formData.vesselName}_${dateStr}.json`, { type: 'application/json' });
         if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
         else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = file.name; l.click(); }
@@ -442,31 +389,20 @@ function App() {
 
     return (
         <div className="min-h-screen relative">
-            {/* ROTEADOR MODULAR DE TELAS */}
             {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
             {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} />}
-            {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules }} />}
             
-            {/* CALENDÁRIO */}
+            {/* ADMIN RECEBE OS LAUDOS PARA CALCULAR AS HORAS */}
+            {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules, reports }} />}
+            
             {rawView === 'calendar' && (
                 <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
                     <div className="flex items-center gap-4 mb-4"><button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button><h1 className="text-xl font-bold text-white">Agenda de Serviços</h1></div>
-                    <SafeComponent 
-                        name="CalendarView" 
-                        props={{ 
-                            reports, schedules, 
-                            onDateClick: (date, events) => { 
-                                if(events.length > 0) setSelectedDateEvents({ date, events }); 
-                                else showConfirm("Agendar Serviço", `Criar agendamento para ${formatDate(date)}?`, () => { setScheduleData({date, endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); }); 
-                            }, 
-                            onAddSchedule: () => { setScheduleData({date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); } 
-                        }} 
-                    />
+                    <SafeComponent name="CalendarView" props={{ reports, schedules, onDateClick: (date, events) => { if(events.length > 0) setSelectedDateEvents({ date, events }); else showConfirm("Agendar Serviço", `Criar agendamento para ${formatDate(date)}?`, () => { setScheduleData({date, endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); }); }, onAddSchedule: () => { setScheduleData({date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); } }} />
                 </div>
             )}
             
-            {/* CABEÇALHO DO FORMULÁRIO/PREVIEW */}
             {(rawView === 'form' || rawView === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
@@ -480,12 +416,10 @@ function App() {
                 </div>
             )}
             
-            {/* FORMULÁRIO E ASSINATURAS */}
             {rawView === 'form' && <SafeComponent name="ReportFormView" props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName && formData.executionPeriods?.length > 0), showConfirm: showCustomDialog }} />}
             {rawView === 'sig_tech' && <SafeComponent name="SignaturePad" props={{ title: "Assinatura do Técnico", onSave: saveTechSig, onCancel: () => setView('form') }} />}
             {rawView === 'sig_client' && <SafeComponent name="SignaturePad" props={{ title: "Assinatura Cliente", onSave: saveClientSig, onSkip: skipClientSig, onCancel: () => setView('sig_tech') }} />}
             
-            {/* PREVIEW E PDF */}
             {rawView === 'preview' && (
                 <>
                     <SafeComponent name="ReportPreviewView" props={{ startNewReport, setView, handlePrint: () => window.print(), isPrinting: false, shareData }} />
@@ -493,28 +427,14 @@ function App() {
                 </>
             )}
             
-            {/* --- MODAIS DE SOBREPOSIÇÃO (Agendamento) --- */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                {scheduleData.id ? <Icons.Pen size={18}/> : <Icons.Plus size={18}/>} 
-                                {scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}
-                            </h3>
-                            {scheduleData.batchId && <span className="bg-purple-500/20 text-purple-400 text-[10px] px-2 py-0.5 rounded font-bold border border-purple-500/30 flex items-center gap-1" title="Faz parte de um Lote"><Icons.Layers size={12}/> Lote</span>}
-                        </div>
-
+                        <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-white flex items-center gap-2">{scheduleData.id ? <Icons.Pen size={18}/> : <Icons.Plus size={18}/>} {scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>{scheduleData.batchId && <span className="bg-purple-500/20 text-purple-400 text-[10px] px-2 py-0.5 rounded font-bold border border-purple-500/30 flex items-center gap-1"><Icons.Layers size={12}/> Lote</span>}</div>
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Inicial</label>
-                                    <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Final</label>
-                                    <input type="date" className={`w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm ${scheduleData.id ? 'opacity-50 cursor-not-allowed' : ''}`} value={scheduleData.endDate} onChange={e => setScheduleData({...scheduleData, endDate: e.target.value})} disabled={!!scheduleData.id} title={scheduleData.id ? "Apenas em novos agendamentos" : "Opcional. Preencha para criar múltiplos dias."} />
-                                </div>
+                                <div><label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Inicial</label><input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} /></div>
+                                <div><label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Final</label><input type="date" className={`w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm ${scheduleData.id ? 'opacity-50 cursor-not-allowed' : ''}`} value={scheduleData.endDate} onChange={e => setScheduleData({...scheduleData, endDate: e.target.value})} disabled={!!scheduleData.id} title={scheduleData.id ? "Apenas em novos agendamentos" : "Opcional. Preencha para criar múltiplos dias."} /></div>
                             </div>
                             <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
                             <input type="text" placeholder="Descrição Rápida..." className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
@@ -524,40 +444,19 @@ function App() {
                 </div>
             )}
             
-            {/* MODAL: DETALHES DOS EVENTOS DE UM DIA */}
             {selectedDateEvents && (
                 <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-slate-800 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
-                        <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-white capitalize">{formatDate(selectedDateEvents.date)}</h3>
-                            <button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><Icons.ArrowLeft className="rotate-180"/></button>
-                        </div>
+                        <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center"><h3 className="text-lg font-bold text-white capitalize">{formatDate(selectedDateEvents.date)}</h3><button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><Icons.ArrowLeft className="rotate-180"/></button></div>
                         <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
                             {selectedDateEvents.events.length === 0 && <p className="text-slate-500 text-center py-4">Nenhum evento.</p>}
                             {selectedDateEvents.events.map((evt, idx) => (
                                 <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${evt.type === 'report' ? 'bg-green-900/20 border-green-500/30' : 'bg-orange-900/20 border-orange-500/30'}`}>
                                     <div className="overflow-hidden mr-3">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{evt.type === 'report' ? 'Realizado' : 'Agendado'}</span>
-                                            {evt.batchId && <span className="text-[10px] font-bold text-purple-400 flex items-center gap-0.5"><Icons.Layers size={10}/> Lote</span>}
-                                            <span className="text-xs text-slate-400 font-mono hidden sm:inline">{evt.time}</span>
-                                        </div>
+                                        <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{evt.type === 'report' ? 'Realizado' : 'Agendado'}</span>{evt.batchId && <span className="text-[10px] font-bold text-purple-400 flex items-center gap-0.5"><Icons.Layers size={10}/> Lote</span>}<span className="text-xs text-slate-400 font-mono hidden sm:inline">{evt.time}</span></div>
                                         <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>{evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
-                                        {evt.type === 'schedule' ? (
-                                            <>
-                                                <button onClick={() => {openEditSchedule(evt); setSelectedDateEvents(null);}} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button>
-                                                <button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button>
-                                            </>
-                                        ) : (
-                                            <button onClick={() => { 
-                                                setSelectedDateEvents(null); 
-                                                if(isTechUser) editReport(null, evt.data); 
-                                                else openPreview(null, evt.data);
-                                            }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>
-                                        )}
-                                    </div>
+                                    <div className="flex gap-2 shrink-0">{evt.type === 'schedule' ? (<><button onClick={() => {openEditSchedule(evt); setSelectedDateEvents(null);}} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button><button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button></>) : (<button onClick={() => { setSelectedDateEvents(null); if(isTechUser) editReport(null, evt.data); else openPreview(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>)}</div>
                                 </div>
                             ))}
                         </div>
@@ -566,7 +465,6 @@ function App() {
                 </div>
             )}
             
-            {/* O NOVO SISTEMA DE DIÁLOGO TURBINADO */}
             {dialog.isOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
                     <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
@@ -576,9 +474,7 @@ function App() {
                         </div>
                         <div className="p-6 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{dialog.message}</div>
                         <div className={`p-4 border-t border-slate-700 bg-slate-900/50 flex ${dialog.buttons.length > 2 ? 'flex-col gap-2' : 'justify-end gap-3'}`}>
-                            {dialog.buttons.map((btn, i) => (
-                                <button key={i} onClick={btn.onClick} className={`px-5 py-2.5 rounded-xl font-bold transition-all shadow-md ${btn.style}`}>{btn.label}</button>
-                            ))}
+                            {dialog.buttons.map((btn, i) => <button key={i} onClick={btn.onClick} className={`px-5 py-2.5 rounded-xl font-bold transition-all shadow-md ${btn.style}`}>{btn.label}</button> )}
                         </div>
                     </div>
                 </div>
