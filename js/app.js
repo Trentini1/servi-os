@@ -1,4 +1,4 @@
-// --- CÉREBRO DO SISTEMA (js/app.js) ---
+// --- CÉREBRO DO SISTEMA (js/app.js) --- V7.2 (Limpo, Modular e Corrigido)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -7,24 +7,22 @@ const firebaseConfig = {
   apiKey: "AIzaSyDvyogaIlFQwrLARo9S4aJylT1N70-lhYs",
   authDomain: "retiblocos-app.firebaseapp.com",
   projectId: "retiblocos-app",
-  storageBucket: "retiblocos-app.firebasestorage.app",
+  storageBucket: "retiblocos-app.firebasestorage.app", 
   messagingSenderId: "509287186524",
   appId: "1:509287186524:web:2ecd4802f66536bf7ea699"
 };
 
-if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
-const auth = firebase ? firebase.auth() : null;
-const db = firebase ? firebase.firestore() : null;
+if (typeof firebase !== 'undefined' && !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+window.auth = firebase ? firebase.auth() : null;
+window.db = firebase ? firebase.firestore() : null;
+const storage = (firebase && typeof firebase.storage === 'function') ? firebase.storage() : null;
 const appId = 'retiblocos-v1';
 
-// 2. ÍCONES (SVG)
-const Icon = ({ path, size = 18, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
-);
+// 2. ÍCONES GLOBAIS
+const Icon = ({ path, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
 
-const Icons = {
+window.Icons = {
     ArrowLeft: (props) => <Icon {...props} path={<><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></>} />,
     Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />,
     Trash: (props) => <Icon {...props} path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>} />,
@@ -43,59 +41,57 @@ const Icons = {
     ChevronLeft: (props) => <Icon {...props} path={<><path d="m15 18-6-6 6-6"/></>} />,
     ChevronRight: (props) => <Icon {...props} path={<><path d="m9 18 6-6-6-6"/></>} />,
     Alert: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />,
-    Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />
+    Eye: (props) => <Icon {...props} path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} />,
+    Printer: (props) => <Icon {...props} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>} />,
+    Spinner: (props) => <Icon {...props} className="animate-spin" path={<><path d="M21 12a9 9 0 1 1-6.219-8.56"/></>} />,
+    Warning: (props) => <Icon {...props} path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>} />,
+    Layers: (props) => <Icon {...props} path={<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>} />
 };
 
-// 3. DADOS ESTÁTICOS
-const SAAM_BRANCHES = [ "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Brasil S.A. - Santos", "SAAM Towage Brasil S.A. - Rio Grande", "SAAM Towage Brasil S.A. - Sepetiba", "SAAM Towage Brasil S.A. - Suape", "SAAM Towage Brasil S.A. - São Luís", "SAAM Towage Brasil S.A. - Salvador", "SAAM Towage Brasil S.A. - Vitória", "SAAM Towage Brasil S.A. - Navegantes", "SAAM Towage Brasil S.A. - São Francisco do Sul", "SAAM Towage Brasil S.A. - Paranaguá" ];
-const MAINTENANCE_TYPES = [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ];
-const ENGINE_POSITIONS = [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ];
-const PART_SOURCES = ["Retiblocos", "Cliente"];
-const MAX_PHOTOS = 6;
+// 3. CONSTANTES DO SISTEMA
+window.AppConstants = {
+    SAAM_BRANCHES: [ 
+        "SAAM Towage Brasil S.A. - Matriz (RJ)", "SAAM Towage Brasil S.A. - Santos", "SAAM Towage Brasil S.A. - Rio Grande", 
+        "SAAM Towage Brasil S.A. - Sepetiba", "SAAM Towage Brasil S.A. - Suape", "SAAM Towage Brasil S.A. - Salvador", 
+        "SAAM Towage Brasil S.A. - Vitória", "SAAM Towage Brasil S.A. - Navegantes", "SAAM Towage Brasil S.A. - São Francisco do Sul", 
+        "SAAM Towage Brasil S.A. - Paranaguá", "SAAM Towage Brasil S.A. - Santana", "SAAM Towage Brasil S.A. - Vila do Conde & Barcarena",
+        "SAAM Towage Brasil S.A. - Belém", "SAAM Towage Brasil S.A. - São Luís-PDM", "SAAM Towage Brasil S.A. - Itaqui & Alumar",
+        "SAAM Towage Brasil S.A. - Pecém", "SAAM Towage Brasil S.A. - Macuripe (Fortaleza)"
+    ],
+    MAINTENANCE_TYPES: [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ],
+    ENGINE_POSITIONS: [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ],
+    PART_SOURCES: ["Retiblocos", "Cliente"],
+    MAX_PHOTOS: 12
+};
 
-// 4. UTILITÁRIOS
-const compressImage = (file, quality = 0.5, maxWidth = 600) => {
+const dataURLtoBlob = (dataurl) => {
+    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1], bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+    return new Blob([u8arr], {type:mime});
+};
+
+const compressImage = (file, quality = 0.6, maxWidth = 800) => {
     return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
+        const reader = new FileReader(); reader.readAsDataURL(file);
         reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
+            const img = new Image(); img.src = event.target.result;
             img.onload = () => {
                 const elem = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
+                let width = img.width, height = img.height;
                 if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
                 elem.width = width; elem.height = height;
-                const ctx = elem.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
+                const ctx = elem.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
                 resolve(elem.toDataURL('image/jpeg', quality));
             };
         };
     });
 };
 
-// --- COMPONENTE: INTRODUÇÃO ---
 const IntroAnimation = ({ onFinish }) => {
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            onFinish();
-        }, 2500); 
-        return () => clearTimeout(timer);
-    }, []);
-
-    return (
-        <div className="intro-overlay">
-            <div className="intro-logo-container">
-                <div className="intro-rb">RB</div>
-            </div>
-            <h1 className="intro-text">Retiblocos</h1>
-            <p className="intro-sub">SISTEMA DE GESTÃO TÉCNICA</p>
-        </div>
-    );
+    useEffect(() => { const t = setTimeout(() => onFinish(), 2500); return () => clearTimeout(t); }, []);
+    return <div className="intro-overlay"><div className="intro-logo-container"><div className="intro-rb">RB</div></div><h1 className="intro-text">Retiblocos</h1><p className="intro-sub">SISTEMA DE GESTÃO TÉCNICA</p></div>;
 };
 
-// --- COMPONENTE: ASSINATURA ---
 const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
     const canvasRef = useRef(null);
     useEffect(() => {
@@ -118,7 +114,7 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
             <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[70vh]">
                 <div className="bg-slate-100 p-4 border-b flex justify-between items-center shrink-0">
                     <h3 className="text-slate-800 font-bold text-lg">{title}</h3>
-                    <button onClick={() => {const c=canvasRef.current;c.getContext('2d').clearRect(0,0,c.width,c.height);c.getContext('2d').beginPath();}} className="text-slate-500 hover:text-red-500 p-2"><Icons.Refresh /></button>
+                    <button onClick={() => {const c=canvasRef.current;c.getContext('2d').clearRect(0,0,c.width,c.height);c.getContext('2d').beginPath();}} className="text-slate-500 hover:text-red-500 p-2"><window.Icons.Refresh /></button>
                 </div>
                 <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair touch-none">
                     <canvas ref={canvasRef} className="w-full h-full block touch-none" onMouseDown={start} onMouseMove={move} onTouchStart={start} onTouchMove={move} />
@@ -126,7 +122,7 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
                 </div>
                 <div className="bg-slate-50 p-4 border-t flex gap-3 shrink-0">
                     <button onClick={onCancel} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-200 rounded-lg">Voltar</button>
-                    {onSkip && <button onClick={onSkip} className="flex-1 py-3 font-semibold text-orange-600 hover:bg-orange-50 rounded-lg flex items-center justify-center gap-1"><Icons.Skip size={16}/> Pular</button>}
+                    {onSkip && <button onClick={onSkip} className="flex-1 py-3 font-semibold text-orange-600 hover:bg-orange-50 rounded-lg flex items-center justify-center gap-1"><window.Icons.Skip size={16}/> Pular</button>}
                     <button onClick={() => onSave(canvasRef.current.toDataURL())} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg">Confirmar</button>
                 </div>
             </div>
@@ -134,486 +130,323 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
     );
 };
 
-// --- COMPONENTE: CALENDÁRIO OTIMIZADO ---
-const CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
-    const [currentDate, setCurrentDate] = useState(new Date());
-    
-    const events = useMemo(() => {
-        const all = [];
-        reports.forEach(r => {
-            if(r.startDate) all.push({ 
-                date: r.startDate, 
-                title: r.vesselName, 
-                time: `${r.startTime || '08:00'} - ${r.endTime || '18:00'}`,
-                type: 'report', 
-                id: r.id,
-                data: r
-            });
-        });
-        schedules.forEach(s => {
-            if(s.date) all.push({ 
-                date: s.date, 
-                title: s.vesselName, 
-                time: 'Previsão',
-                type: 'schedule', 
-                id: s.id, 
-                ...s 
-            });
-        });
-        return all;
-    }, [reports, schedules]);
-
-    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-    const monthName = currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-
-    const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-    const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-
-    const renderDays = () => {
-        const days = [];
-        for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="calendar-day bg-slate-800/30"></div>);
-        
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayEvents = events.filter(e => e.date === dateStr);
-            
-            days.push(
-                <div key={day} onClick={() => onDateClick(dateStr, dayEvents)} className="calendar-day cursor-pointer hover:bg-slate-700 transition-colors h-24 p-1 border border-slate-700/50 relative">
-                    <span className={`absolute top-1 right-1 text-xs font-bold ${dayEvents.length > 0 ? 'text-white' : 'text-slate-500'}`}>{day}</span>
-                    <div className="flex flex-col gap-1 mt-5 overflow-hidden">
-                        {dayEvents.map((ev, idx) => (
-                            <div key={idx} className={`text-[8px] px-1 py-0.5 rounded truncate font-bold border-l-2 ${ev.type === 'report' ? 'bg-green-900/40 text-green-200 border-green-500' : 'bg-orange-900/40 text-orange-200 border-orange-500'}`}>
-                                <div className="truncate">{ev.title}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        }
-        return days;
-    };
-
+// COMPONENTE PARA RENDERIZAR OS MÓDULOS EXTERNOS DE FORMA SEGURA
+const SafeComponent = ({ name, props }) => {
+    if (typeof window[name] === 'function') return React.createElement(window[name], props); 
     return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
-                <button onClick={prevMonth} className="p-2 hover:bg-slate-700 rounded-lg text-slate-300"><Icons.ChevronLeft/></button>
-                <h2 className="text-lg font-bold text-white capitalize">{monthName}</h2>
-                <button onClick={nextMonth} className="p-2 hover:bg-slate-700 rounded-lg text-slate-300"><Icons.ChevronRight/></button>
-            </div>
-            
-            <div className="grid grid-cols-7 gap-1">
-                {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => <div key={d} className="text-center py-2 bg-slate-800 text-[10px] uppercase text-slate-400 font-bold rounded-t-lg">{d}</div>)}
-                {renderDays()}
-            </div>
-            
-            <div className="flex gap-4 text-xs text-slate-400 justify-center pt-2">
-                <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-full"></div> Relatórios Feitos</span>
-                <span className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-500 rounded-full"></div> Agendamentos</span>
-            </div>
-
-            <button onClick={onAddSchedule} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-slate-600">
-                <Icons.Plus size={16}/> Agendar Serviço Futuro
-            </button>
+        <div className="p-6 bg-slate-800 border border-red-500 rounded-xl text-center shadow-xl max-w-md mx-auto mt-10">
+            <window.Icons.Warning size={40} className="text-red-500 mx-auto mb-3" />
+            <h3 className="text-red-400 font-bold text-lg mb-2">Erro Crítico</h3>
+            <p className="text-slate-300 text-sm">O módulo <code>{name}</code> não foi encontrado. Verifique se os arquivos JS estão carregados na ordem correta no HTML.</p>
         </div>
     );
 };
 
-// --- APP PRINCIPAL ---
+// --- APP PRINCIPAL (O MAESTRO) ---
 function App() {
-    const [view, setView] = useState('intro');
+    const [rawView, setRawView] = useState('loading'); 
     const [user, setUser] = useState(null);
+    const [currentUserData, setCurrentUserData] = useState(null);
     const [reports, setReports] = useState([]);
     const [schedules, setSchedules] = useState([]);
-    const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     
-    // Estado para Agendamento e Modal de Dia
-    const [scheduleData, setScheduleData] = useState({ date: '', vesselName: '', description: '' });
-    const [showScheduleModal, setShowScheduleModal] = useState(false);
-    const [selectedDateEvents, setSelectedDateEvents] = useState(null); // { date: '...', events: [] }
+    // --- ESTADO DE DIÁLOGO AVANÇADO ---
+    const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', buttons: [] });
+    
+    const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
+    const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, buttons: [{ label: 'OK, Entendi', style: 'bg-blue-600 hover:bg-blue-500 text-white', onClick: closeDialog }] });
+    const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, buttons: [{ label: 'Cancelar', style: 'bg-transparent text-slate-400 hover:text-white', onClick: closeDialog }, { label: 'Confirmar', style: 'bg-orange-600 hover:bg-orange-500 text-white', onClick: () => { onConfirm(); closeDialog(); } }] });
+    const showCustomDialog = (title, message, buttons) => setDialog({ isOpen: true, type: 'custom', title, message, buttons });
 
-    // Estado do Formulário
+    const [scheduleData, setScheduleData] = useState({ date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null });
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedDateEvents, setSelectedDateEvents] = useState(null); 
+
     const initialFormState = {
-        controlNumber: '', branch: SAAM_BRANCHES[0], vesselName: '', enginePosition: '',
-        engineModel: '', engineSerial: '', maintenanceType: MAINTENANCE_TYPES[0], maintenanceTypeOther: '',
-        technicianName: '', startDate: new Date().toISOString().split('T')[0], startTime: '08:00',
-        endDate: new Date().toISOString().split('T')[0], endTime: '17:00',
+        controlNumber: '', branch: window.AppConstants.SAAM_BRANCHES[0], vesselName: '', enginePosition: '',
+        engineModel: '', engineSerial: '', maintenanceType: window.AppConstants.MAINTENANCE_TYPES[0], maintenanceTypeOther: '',
+        technicianName: '', 
+        executionPeriods: [{ id: Date.now(), date: new Date().toISOString().split('T')[0], startTime: '08:00', endTime: '17:00' }],
         tasksExecuted: '', notes: '', runningHours: '', photos: [], parts: [],
         technicianSignature: null, clientSignature: null
     };
 
     const [formData, setFormData] = useState(initialFormState);
-    const [newPart, setNewPart] = useState({ name: '', qty: '1', source: 'Retiblocos' });
+
+    // ==============================================================================
+    // A MÁGICA DO AUTO-SAVE (ANTI-BURRICE)
+    // ==============================================================================
+    useEffect(() => {
+        if (rawView === 'form' && formData.vesselName !== undefined) {
+            if (formData.vesselName.trim() !== '' || formData.tasksExecuted.trim() !== '') {
+                localStorage.setItem('rb_draft', JSON.stringify(formData));
+            }
+        }
+    }, [formData, rawView]);
+
+    const setView = (newView) => {
+        setRawView(newView);
+        window.history.pushState({ view: newView }, '', `#${newView}`);
+        window.scrollTo(0, 0); 
+    };
+
+    useEffect(() => {
+        const handlePopState = (event) => {
+            if (event.state && event.state.view) setRawView(event.state.view);
+            else {
+                const fallback = window.auth?.currentUser ? 'dashboard' : 'auth';
+                setRawView(fallback);
+                window.history.replaceState({ view: fallback }, '', `#${fallback}`);
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
 
     useEffect(() => { const l = document.getElementById('loading-screen'); if(l) l.style.display = 'none'; }, []);
 
-    // Lógica da Intro
     useEffect(() => {
-        const hasSeenIntro = localStorage.getItem('hasSeenIntro');
-        if (hasSeenIntro) {
-            setView('dashboard');
-        }
+        if (rawView === 'form' || rawView === 'preview') {
+            const firstDate = formData.executionPeriods?.[0]?.date || 'DATA';
+            document.title = formData.vesselName ? `RB - ${formData.vesselName.toUpperCase()} - ${formData.enginePosition ? formData.enginePosition.toUpperCase() : 'GERAL'} - ${firstDate}` : "Novo Relatorio";
+        } else document.title = "Retiblocos System";
+    }, [formData, rawView]);
+
+    useEffect(() => {
+        if(!window.auth) return;
+        const unsubscribe = window.auth.onAuthStateChanged(async (u) => {
+            setUser(u);
+            if (u) {
+                if (u.isAnonymous) return await window.auth.signOut();
+                const doc = await window.db.collection('users').doc(u.uid).get();
+                if (doc.exists) {
+                    const userData = doc.data(); setCurrentUserData(userData); initialFormState.technicianName = userData.name || '';
+                } else setCurrentUserData({ name: u.email, role: 'client' }); 
+                
+                const targetView = !localStorage.getItem('hasSeenIntro') ? 'intro' : 'dashboard';
+                setRawView(targetView); window.history.replaceState({ view: targetView }, '', `#${targetView}`);
+            } else {
+                setCurrentUserData(null); setRawView('auth'); window.history.replaceState({ view: 'auth' }, '', '#auth');
+            }
+        });
+        return () => unsubscribe();
     }, []);
 
-    // AUTH
     useEffect(() => {
-        if(!auth) return;
-        auth.signInAnonymously().catch(console.error);
-        return auth.onAuthStateChanged(u => setUser(u));
-    }, []);
-
-    // CARREGAR DADOS
-    useEffect(() => {
-        if (!user || !db) return;
-        
-        const unsubReports = db.collection('artifacts').doc(appId).collection('public_reports')
-            .orderBy('savedAt', 'desc').limit(50)
-            .onSnapshot(s => setReports(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-        
-        const unsubSchedules = db.collection('artifacts').doc(appId).collection('schedules')
-            .orderBy('date', 'asc')
-            .onSnapshot(s => setSchedules(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-
+        if (!user || !window.db) return;
+        const unsubReports = window.db.collection('artifacts').doc(appId).collection('public_reports').orderBy('savedAt', 'desc').limit(500).onSnapshot(s => setReports(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+        const unsubSchedules = window.db.collection('artifacts').doc(appId).collection('schedules').orderBy('date', 'asc').onSnapshot(s => setSchedules(s.docs.map(d => ({ ...d.data(), id: d.id }))));
         return () => { unsubReports(); unsubSchedules(); };
     }, [user]);
 
-    const finishIntro = () => {
-        localStorage.setItem('hasSeenIntro', 'true');
-        setView('dashboard');
+    const finishIntro = () => { localStorage.setItem('hasSeenIntro', 'true'); setView('dashboard'); };
+    const formatDate = (d) => { if(!d) return '--/--/----'; const parts = d.split('-'); if(parts.length !== 3) return d; return `${parts[2]}/${parts[1]}/${parts[0]}`; };
+
+    const calculateDuration = (periods) => {
+        if (!periods || periods.length === 0) return "--";
+        let totalMs = 0;
+        periods.forEach(p => {
+            const s = new Date(`${p.date}T${p.startTime}`);
+            const e = new Date(`${p.date}T${p.endTime}`);
+            if (!isNaN(s) && !isNaN(e) && e >= s) totalMs += (e - s);
+        });
+        const hours = Math.floor(totalMs / 3600000);
+        const mins = Math.round((totalMs % 3600000) / 60000);
+        return `${hours}h ${mins}min`;
     };
 
-    // --- LÓGICA DE AGENDAMENTO (CRIAR, EDITAR, DELETAR) ---
-    const saveSchedule = async () => {
-        if(!scheduleData.date || !scheduleData.vesselName) return alert("Preencha data e embarcação");
+    const applyRetrocompatibility = (report) => {
+        let safeData = { ...initialFormState, ...report };
+        if (safeData.startDate && (!safeData.executionPeriods || safeData.executionPeriods.length === 0)) {
+            safeData.executionPeriods = [{ id: Date.now(), date: safeData.startDate, startTime: safeData.startTime || '08:00', endTime: safeData.endTime || '17:00' }];
+        }
+        return safeData;
+    };
+
+    // --- AGENDAMENTOS ---
+    const saveSchedule = async () => { 
+        if(!scheduleData.date || !scheduleData.vesselName) return showAlert("Atenção", "Preencha a data inicial e o nome da embarcação.");
         try {
-            const colRef = db.collection('artifacts').doc(appId).collection('schedules');
+            const colRef = window.db.collection('artifacts').doc(appId).collection('schedules');
+            const baseData = { vesselName: scheduleData.vesselName, description: scheduleData.description };
             if (scheduleData.id) {
-                // EDIÇÃO
-                await colRef.doc(scheduleData.id).update(scheduleData);
-                alert("Agendamento atualizado!");
+                await colRef.doc(scheduleData.id).update({ ...baseData, date: scheduleData.date }); showAlert("Sucesso", "Agendamento atualizado!");
             } else {
-                // CRIAÇÃO
-                await colRef.add(scheduleData);
-                alert("Agendado com sucesso!");
+                if (scheduleData.endDate && scheduleData.endDate !== scheduleData.date) {
+                    let currDate = new Date(scheduleData.date + 'T12:00:00'); let lastDate = new Date(scheduleData.endDate + 'T12:00:00');
+                    if (lastDate < currDate) return showAlert("Erro Lógico", "A data final precisa ser maior que a data inicial.");
+                    const diffDays = Math.ceil(Math.abs(lastDate - currDate) / (1000 * 60 * 60 * 24)); 
+                    if (diffDays > 60) return showAlert("Exagero", "Você não pode agendar mais de 60 dias seguidos para evitar sobrecarga.");
+                    const newBatchId = 'LOTE_' + Date.now().toString();
+                    const batch = window.db.batch();
+                    while (currDate <= lastDate) {
+                        const dateStr = currDate.toISOString().split('T')[0];
+                        batch.set(colRef.doc(), { ...baseData, date: dateStr, batchId: newBatchId });
+                        currDate.setDate(currDate.getDate() + 1);
+                    }
+                    await batch.commit(); showAlert("Sucesso", `Foram criados ${diffDays + 1} dias de agendamento em lote!`);
+                } else {
+                    await colRef.add({ ...baseData, date: scheduleData.date, batchId: null }); showAlert("Sucesso", "Serviço agendado!");
+                }
             }
-            setShowScheduleModal(false);
-            setScheduleData({ date: '', vesselName: '', description: '' });
-            setSelectedDateEvents(null); // Fecha o modal de dia também se estiver aberto
-        } catch(e) { 
-            console.error(e);
-            alert("Erro ao salvar agendamento."); 
+            setShowScheduleModal(false); setScheduleData({ date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null }); setSelectedDateEvents(null); 
+        } catch(e) { console.error(e); showAlert("Erro", "Erro ao salvar agendamento."); }
+    };
+    const openEditSchedule = (evt) => { setScheduleData({ id: evt.id, date: evt.date || '', endDate: '', vesselName: evt.vesselName || '', description: evt.description || '', batchId: evt.batchId || null }); setShowScheduleModal(true); };
+    const deleteSchedule = (id) => { 
+        if (!id) return;
+        const scheduleToDelete = schedules.find(s => s.id === id);
+        if (scheduleToDelete && scheduleToDelete.batchId) {
+            showCustomDialog("Excluir Agendamento em Lote", "Este serviço faz parte de um lote. Apagar apenas este dia ou todo o lote?", [
+                { label: "Apagar Todo o Lote", style: "bg-red-600 hover:bg-red-500 text-white w-full sm:w-auto", onClick: async () => {
+                    closeDialog(); try {
+                        const qs = await window.db.collection('artifacts').doc(appId).collection('schedules').where('batchId', '==', scheduleToDelete.batchId).get();
+                        const batch = window.db.batch(); qs.forEach(doc => batch.delete(doc.ref)); await batch.commit();
+                        setSelectedDateEvents(null); showAlert("Faxina Feita", "Lote inteiro excluído.");
+                    } catch(e) { showAlert("Erro", "Erro ao excluir o lote."); }
+                }},
+                { label: "Apagar Só Este Dia", style: "bg-orange-600 hover:bg-orange-500 text-white w-full sm:w-auto", onClick: async () => {
+                    closeDialog(); try { await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; }); } catch(e) { showAlert("Erro", "Falha ao excluir."); }
+                }},
+                { label: "Cancelar", style: "bg-slate-700 hover:bg-slate-600 text-white w-full sm:w-auto", onClick: closeDialog }
+            ]);
+        } else {
+            showConfirm("Excluir Agendamento", "Tem certeza que deseja apagar este agendamento?", async () => {
+                try { await window.db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete(); setSelectedDateEvents(p => { if (!p) return null; const n = p.events.filter(e => e.id !== id); return n.length > 0 ? { ...p, events: n } : null; }); } catch(e) { showAlert("Erro", "Falha ao excluir."); }
+            });
         }
     };
-
-    const deleteSchedule = async (id) => {
-        if(!confirm("Tem certeza que deseja EXCLUIR este agendamento?")) return;
-        try {
-            await db.collection('artifacts').doc(appId).collection('schedules').doc(id).delete();
-            // Atualiza a lista local do modal se estiver aberto
-            if(selectedDateEvents) {
-                setSelectedDateEvents(prev => ({
-                    ...prev,
-                    events: prev.events.filter(e => e.id !== id)
-                }));
-            }
-        } catch(e) {
-            alert("Erro ao excluir.");
-        }
-    };
-
-    const openEditSchedule = (schedule) => {
-        setScheduleData(schedule);
-        setShowScheduleModal(true);
+    const purgeOldSchedules = () => { 
+        const today = new Date(); today.setHours(0,0,0,0);
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const oldOnes = schedules.filter(s => s.date < todayStr);
+        if(oldOnes.length === 0) return showAlert("Tranquilo", "O seu calendário já está limpo.");
+        showCustomDialog("Faxina de Calendário", `Encontrados ${oldOnes.length} agendamentos antigos. Deletar permanentemente?`, [
+            { label: "Sim, Excluir Tudo", style: "bg-red-600 hover:bg-red-500 text-white", onClick: async () => {
+                closeDialog(); try { const batch = window.db.batch(); const colRef = window.db.collection('artifacts').doc(appId).collection('schedules'); oldOnes.forEach(s => batch.delete(colRef.doc(s.id))); await batch.commit(); showAlert("Sistema Limpo", "Todos os agendamentos antigos foram pulverizados com sucesso."); } catch (e) { showAlert("Erro", "Falha ao executar a faxina."); }
+            }},
+            { label: "Cancelar", style: "bg-slate-700 hover:bg-slate-600 text-white", onClick: closeDialog }
+        ]);
     };
 
     // --- LÓGICA DE RELATÓRIOS ---
-
-    const startNewReport = () => { setFormData(initialFormState); setView('form'); };
-    const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(report); setView('form'); };
-    const deleteReport = async (e, id) => {
-        if(e) e.stopPropagation();
-        if (!confirm("Excluir este relatório?")) return;
-        try { await db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (e) { alert("Erro ao excluir."); }
+    const startNewReport = () => {
+        const draft = localStorage.getItem('rb_draft');
+        if (draft) {
+            try {
+                const parsedDraft = JSON.parse(draft);
+                if (parsedDraft.vesselName || parsedDraft.tasksExecuted) {
+                    showCustomDialog(
+                        "Rascunho Encontrado", 
+                        "Você tem um relatório que não foi finalizado. Deseja continuar de onde parou ou apagar e começar do zero?", 
+                        [
+                            { label: "Recuperar", style: "bg-blue-600 hover:bg-blue-500 text-white w-full sm:w-auto", onClick: () => { setFormData(parsedDraft); setView('form'); closeDialog(); } },
+                            { label: "Descartar", style: "bg-red-600 hover:bg-red-500 text-white w-full sm:w-auto", onClick: () => { localStorage.removeItem('rb_draft'); setFormData({ ...initialFormState, technicianName: currentUserData?.name || '' }); setView('form'); closeDialog(); } }
+                        ]
+                    );
+                    return; 
+                }
+            } catch (e) { console.error("Rascunho corrompido"); }
+        }
+        setFormData({ ...initialFormState, technicianName: currentUserData?.name || '' }); 
+        setView('form'); 
     };
+    
+    const openPreview = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('preview'); };
+    const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('form'); };
+    const deleteReport = (e, id) => { if(e) e.stopPropagation(); if(!id) return; showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => { try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); } }); };
 
     const saveToCloud = async (dataToSave = null, silent = false) => {
-        if (!user) return alert("Conectando...");
+        if (!user) return showAlert("Aviso", "Conectando ao servidor...");
         if (!silent) setIsSaving(true);
-        const payload = dataToSave || formData;
+        const payload = dataToSave || formData; const { id, ...dataLimpa } = payload;
+        dataLimpa.createdBy = user.uid; dataLimpa.createdByName = currentUserData?.name || 'Desconhecido';
         try {
-            const docData = { ...payload, savedAt: new Date().toISOString() };
-            const jsonSize = new Blob([JSON.stringify(docData)]).size;
-            if (jsonSize > 950000) { 
-                alert(`ERRO: Relatório muito pesado (${(jsonSize/1024).toFixed(0)}KB). Limite 1MB.`); 
-                if(!silent) setIsSaving(false); return false; 
-            }
-            
-            const colRef = db.collection('artifacts').doc(appId).collection('public_reports');
-            if (payload.id) {
-                await colRef.doc(payload.id).update(docData);
-            } else {
-                const ref = await colRef.add(docData);
-                setFormData(prev => ({ ...prev, id: ref.id }));
-            }
-            if(!silent) alert("Salvo com sucesso!");
-            return true;
-        } catch (e) { console.error(e); alert("Erro ao salvar."); return false; } 
-        finally { if(!silent) setIsSaving(false); }
+            const docData = { ...dataLimpa, savedAt: new Date().toISOString() };
+            if (new Blob([JSON.stringify(docData)]).size > 950000) { showAlert("Erro", "Texto muito pesado."); if(!silent) setIsSaving(false); return false; }
+            const colRef = window.db.collection('artifacts').doc(appId).collection('public_reports');
+            if (payload.id) { await colRef.doc(payload.id).update(docData); } else { const ref = await colRef.add(docData); setFormData(p => ({ ...p, id: ref.id })); }
+            localStorage.removeItem('rb_draft');
+            if(!silent) showAlert("Sucesso", "Relatório salvo!"); return true;
+        } catch (e) { showAlert("Erro", "Erro crítico."); return false; } finally { if(!silent) setIsSaving(false); }
     };
 
     const handlePhotoUpload = async (e) => {
+        if (!storage) return showAlert("Erro Crítico", "Storage não configurado.");
         if (e.target.files) {
-            const files = Array.from(e.target.files);
-            const remainingSlots = MAX_PHOTOS - formData.photos.length;
-            if (remainingSlots <= 0) return alert(`Limite de ${MAX_PHOTOS} fotos atingido!`);
-            
-            const filesToProcess = files.slice(0, remainingSlots);
-            const processedPhotos = await Promise.all(filesToProcess.map(async (file) => {
-                const compressedUrl = await compressImage(file, 0.5, 600);
-                return { id: Date.now() + Math.random(), url: compressedUrl, caption: '' };
-            }));
-            setFormData(prev => ({ ...prev, photos: [...prev.photos, ...processedPhotos] }));
+            const files = Array.from(e.target.files); const remaining = window.AppConstants.MAX_PHOTOS - formData.photos.length;
+            if (remaining <= 0) return showAlert("Aviso", `Você já atingiu o limite de ${window.AppConstants.MAX_PHOTOS} fotos.`);
+            setIsUploading(true);
+            try {
+                const processed = await Promise.all(files.slice(0, remaining).map(async (f) => {
+                    const comp = await compressImage(f, 0.6, 800); const blob = dataURLtoBlob(comp);
+                    const name = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                    const ref = storage.ref().child(`images/${name}`); await ref.put(blob);
+                    const url = await ref.getDownloadURL(); return { id: Date.now() + Math.random(), url, caption: '' };
+                }));
+                setFormData(p => ({ ...p, photos: [...p.photos, ...processed] }));
+            } catch (err) { showAlert("Erro", "Falha no upload."); } finally { setIsUploading(false); }
         }
     };
-
-    const addPart = () => { if (!newPart.name) return; setFormData(prev => ({ ...prev, parts: [...prev.parts, { ...newPart, id: Date.now() }] })); setNewPart({ name: '', qty: '1', source: 'Retiblocos' }); };
-    const removePart = (id) => setFormData(prev => ({ ...prev, parts: prev.parts.filter(p => p.id !== id) }));
-    const removePhoto = (id) => setFormData(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
-    const updateCaption = (id, text) => setFormData(prev => ({ ...prev, photos: prev.photos.map(p => p.id === id ? { ...p, caption: text } : p) }));
     
     const saveTechSig = (d) => { setFormData(p => ({...p, technicianSignature: d})); setView('sig_client'); };
-    
-    const finalizeReport = async (clientSig) => {
-        const finalData = { ...formData, clientSignature: clientSig };
-        setFormData(finalData);
-        const saved = await saveToCloud(finalData, true);
-        setView('preview');
-        if(!saved) alert("Aviso: Não foi possível sincronizar na nuvem, mas o PDF pode ser gerado.");
-    };
-
+    const finalizeReport = async (clientSig) => { const finalData = { ...formData, clientSignature: clientSig }; setFormData(finalData); const saved = await saveToCloud(finalData, true); setView('preview'); if(!saved) showAlert("Aviso", "Não sincronizou, mas o PDF pode ser gerado."); };
     const saveClientSig = (d) => finalizeReport(d);
     const skipClientSig = () => finalizeReport(null);
-    const isFormValid = () => formData.vesselName && formData.technicianName;
-    const calculateDuration = () => {
-        const s = new Date(`${formData.startDate}T${formData.startTime}`), e = new Date(`${formData.endDate}T${formData.endTime}`);
-        const d = e - s; if(d < 0) return "--";
-        return `${Math.floor(d/3600000)}h ${Math.round((d%3600000)/60000)}min`;
-    };
-    const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR');
-    
     const shareData = async () => {
-        const dataStr = JSON.stringify(formData, null, 2);
-        const fileName = `RB_${formData.vesselName}.json`;
-        const file = new File([dataStr], fileName, { type: 'application/json' });
+        const dataStr = JSON.stringify(formData, null, 2); const dateStr = formData.executionPeriods?.[0]?.date || 'DATA';
+        const file = new File([dataStr], `RB_${formData.vesselName}_${dateStr}.json`, { type: 'application/json' });
         if (navigator.share && navigator.canShare({ files: [file] })) try { await navigator.share({ files: [file] }); } catch (e) {}
-        else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = fileName; l.click(); }
+        else { const l = document.createElement('a'); l.href = URL.createObjectURL(file); l.download = file.name; l.click(); }
     };
 
-    const filteredReports = reports.filter(r => 
-        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    if (rawView === 'loading') return <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center"><Icons.Spinner size={40} className="text-[var(--rb-orange)] mb-4" /><p className="text-slate-400 font-bold tracking-widest uppercase text-xs">Conectando ao Retiblocos...</p></div>;
+
+    const isTechUser = currentUserData?.role === 'tech' || currentUserData?.role === 'master';
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen relative">
+            {/* ROTEADOR MODULAR DE TELAS */}
+            {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
+            {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
+            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} />}
+            {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules, reports }} />}
             
-            {/* VISTA 0: INTRODUÇÃO */}
-            {view === 'intro' && <IntroAnimation onFinish={finishIntro} />}
-
-            {/* VISTA 1: DASHBOARD */}
-            {view === 'dashboard' && (
+            {/* CALENDÁRIO */}
+            {rawView === 'calendar' && (
                 <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
-                    <div className="flex justify-between items-center py-4">
-                        <div><h1 className="text-2xl font-black text-white uppercase tracking-tight">Painel de Controle</h1><p className="text-slate-400 text-sm">Bem-vindo ao sistema Retiblocos</p></div>
-                        <div className="bg-orange-600 w-10 h-10 rounded-lg flex items-center justify-center font-black text-white">RB</div>
-                    </div>
-                    
-                    <button onClick={startNewReport} className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white p-6 rounded-2xl shadow-xl flex items-center justify-between group transition-all transform hover:scale-[1.01]">
-                        <div className="flex items-center gap-4"><div className="bg-white/20 p-3 rounded-xl"><Icons.Pen size={24}/></div><div className="text-left"><h2 className="font-bold text-lg">Criar Novo Relatório</h2><p className="text-orange-100 text-xs">Preencher OS, peças e fotos</p></div></div>
-                        <Icons.ArrowLeft className="rotate-180 opacity-50 group-hover:opacity-100 transition-opacity"/>
-                    </button>
-
-                    {/* Botões de Acesso Rápido */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => setView('calendar')} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500 transition-all text-left group">
-                            <div className="bg-blue-900/50 p-2 rounded-lg w-fit mb-2 text-blue-400 group-hover:text-white transition-colors"><Icons.Calendar size={20}/></div>
-                            <h3 className="font-bold text-white text-sm">Calendário</h3>
-                            <p className="text-xs text-slate-400">Ver agenda e histórico</p>
-                        </button>
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                            <div className="bg-green-900/50 p-2 rounded-lg w-fit mb-2 text-green-400"><Icons.Check size={20}/></div>
-                            <h3 className="font-bold text-white text-sm">Status</h3>
-                            <p className="text-xs text-slate-400">{reports.length} Relatórios feitos</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4 pt-2">
-                        <div className="flex justify-between items-center"><h3 className="text-slate-300 font-bold uppercase text-xs tracking-wider">Histórico Recente</h3><div className="relative"><Icons.Search className="absolute left-3 top-2.5 text-slate-500" size={14}/><input type="text" placeholder="Buscar..." className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-orange-500 outline-none w-40" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
-                        <div className="grid gap-3">
-                            {filteredReports.map(rep => {
-                                const isSigned = !!rep.technicianSignature;
-                                return (
-                                    <div key={rep.id} onClick={(e) => editReport(e, rep)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-orange-500/50 cursor-pointer group relative overflow-hidden">
-                                        {/* STATUS INDICATOR (FINALIZADO/PENDENTE) */}
-                                        <div className="absolute top-2 right-2 flex gap-2">
-                                            <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${isSigned ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
-                                                {isSigned ? <Icons.Check size={10}/> : <Icons.Alert size={10}/>}
-                                                {isSigned ? 'Assinado' : 'Pendente'}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex justify-between items-start mb-2 pr-20">
-                                            <div>
-                                                <h4 className="font-bold text-white text-base uppercase">{rep.vesselName || 'SEM NOME'}</h4>
-                                                <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded uppercase tracking-wider">{rep.controlNumber || 'S/N'}</span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-4 text-xs text-slate-400 mt-3 border-t border-slate-700/50 pt-3">
-                                            <span className="flex items-center gap-1"><Icons.Clock size={12}/> {new Date(rep.startDate).toLocaleDateString('pt-BR')}</span>
-                                            <span>•</span>
-                                            <span>{rep.maintenanceType}</span>
-                                        </div>
-                                        
-                                        <div className="flex gap-2 mt-3">
-                                            <button onClick={(e) => editReport(e, rep)} className="flex-1 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 text-xs font-bold flex items-center justify-center gap-1"><Icons.Pen size={12}/> Abrir</button>
-                                            <button onClick={(e) => deleteReport(e, rep.id)} className="w-10 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600/20 flex items-center justify-center"><Icons.Trash size={14}/></button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* VISTA 2: CALENDÁRIO */}
-            {view === 'calendar' && (
-                <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in">
-                    <div className="flex items-center gap-4 mb-4">
-                        <button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><Icons.ArrowLeft/></button>
-                        <h1 className="text-xl font-bold text-white">Agenda de Serviços</h1>
-                    </div>
-                    
-                    <CalendarView 
-                        reports={reports} 
-                        schedules={schedules} 
-                        onDateClick={(date, events) => {
-                            if(events.length > 0) {
-                                setSelectedDateEvents({ date, events });
-                            } else {
-                                if(confirm(`Agendar serviço para ${new Date(date).toLocaleDateString('pt-BR')}?`)) {
-                                    setScheduleData({...scheduleData, date, id: null}); setShowScheduleModal(true);
-                                }
-                            }
+                    <div className="flex items-center gap-4 mb-4"><button onClick={() => setView('dashboard')} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"><window.Icons.ArrowLeft/></button><h1 className="text-xl font-bold text-white">Agenda de Serviços</h1></div>
+                    <SafeComponent 
+                        name="CalendarView" 
+                        props={{ 
+                            reports, schedules, 
+                            onDateClick: (date, events) => { 
+                                if(events.length > 0) setSelectedDateEvents({ date, events }); 
+                                else showConfirm("Agendar Serviço", `Criar agendamento para ${formatDate(date)}?`, () => { setScheduleData({date, endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); }); 
+                            }, 
+                            onAddSchedule: () => { setScheduleData({date: '', endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); } 
                         }} 
-                        onAddSchedule={() => { setScheduleData({date: '', vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
                     />
                 </div>
             )}
-
-            {/* HEADER FORM/PREVIEW */}
-            {(view === 'form' || view === 'preview') && (
-                <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
-                    <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
-                        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><Icons.Home size={18} /><span className="text-xs font-bold uppercase hidden sm:inline">Início</span></button>
-                        <div className="flex items-center gap-2"><div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div><span className="font-bold text-sm text-white uppercase tracking-wider">{view === 'preview' ? 'Finalizado' : 'Edição'}</span></div>
-                        <div className="flex gap-2">
-                            {view === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"><Icons.Save size={18}/></button>}
-                            {view === 'preview' && <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200">Editar</button>}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* FORMULÁRIO */}
-            {view === 'form' && (
-                <div className="no-print max-w-2xl mx-auto p-4 space-y-8 fade-in pb-32">
-                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Informações</h3>
-                        <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 text-orange-400 font-bold uppercase" placeholder="Nº Controle (EX: 1442)" value={formData.controlNumber} onChange={e => setFormData({...formData, controlNumber: e.target.value})} />
-                        <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>{SAAM_BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}</select>
-                        <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 uppercase font-bold" placeholder="Embarcação" value={formData.vesselName} onChange={e => setFormData({...formData, vesselName: e.target.value})} />
-                            <input list="models" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Modelo Motor" value={formData.engineModel} onChange={e => setFormData({...formData, engineModel: e.target.value})} />
-                            <datalist id="models"><option value="Caterpillar C32"/><option value="Caterpillar 3512"/><option value="Deutz 620"/><option value="MTU 4000"/><option value="C4.4"/></datalist>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 uppercase" placeholder="Série" value={formData.engineSerial} onChange={e => setFormData({...formData, engineSerial: e.target.value})} />
-                            <input type="number" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Horímetro" value={formData.runningHours} onChange={e => setFormData({...formData, runningHours: e.target.value})} />
-                        </div>
-                        <div className="grid grid-cols-4 gap-2">{ENGINE_POSITIONS.map(p => (<button key={p.id} onClick={() => setFormData({...formData, enginePosition: p.label})} className={`py-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${formData.enginePosition === p.label ? 'bg-orange-600 border-orange-600 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>{p.short}</button>))}</div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2">Detalhes</h3>
-                        <select className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" value={formData.maintenanceType} onChange={e => setFormData({...formData, maintenanceType: e.target.value})}>{MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                        {formData.maintenanceType === 'Outros' && <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500 mt-2" placeholder="Especifique..." value={formData.maintenanceTypeOther} onChange={e => setFormData({...formData, maintenanceTypeOther: e.target.value})} />}
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 grid grid-cols-2 gap-4">
-                            <div><label className="text-[10px] text-slate-400 font-bold uppercase">Início</label><input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} /><input type="time" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
-                            <div><label className="text-[10px] text-slate-400 font-bold uppercase">Fim</label><input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} /><input type="time" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-slate-200" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
-                        </div>
-                        <input type="text" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-orange-500" placeholder="Nome do Técnico" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} />
-                    </div>
-
-                    <div className="space-y-4">
-                        <label className="text-xs text-green-400 font-bold uppercase">1. Execução (Realizado)</label>
-                        <textarea rows={6} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-green-500" placeholder="Descreva o serviço..." value={formData.tasksExecuted} onChange={e => setFormData({...formData, tasksExecuted: e.target.value})} />
-                        <label className="text-xs text-blue-400 font-bold uppercase">2. Observações</label>
-                        <textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500" placeholder="Pendências..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
-                    </div>
-
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex items-center gap-2"><Icons.Box size={16}/> Peças</h3>
-                        <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
-                            <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-200" placeholder="Nome da Peça" value={newPart.name} onChange={e => setNewPart({...newPart, name: e.target.value})} />
-                            <div className="flex gap-2">
-                                <input type="text" className="w-20 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-center text-slate-200" placeholder="Qtd" value={newPart.qty} onChange={e => setNewPart({...newPart, qty: e.target.value})} />
-                                <select className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-200" value={newPart.source} onChange={e => setNewPart({...newPart, source: e.target.value})}>{PART_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-500 px-4"><Icons.Plus /></button>
-                            </div>
-                        </div>
-                        {formData.parts.length > 0 && <div className="space-y-2">{formData.parts.map(part => (<div key={part.id} className="flex items-center justify-between bg-slate-800/50 p-2 rounded border border-slate-700/50"><div className="flex-1"><span className="font-bold text-sm text-slate-200">{part.qty}x {part.name}</span><span className={`block text-[10px] font-bold uppercase ${part.source === 'Retiblocos' ? 'text-orange-400' : 'text-blue-400'}`}>{part.source}</span></div><button onClick={() => removePart(part.id)} className="text-slate-500 hover:text-red-500 p-2"><Icons.Trash size={16}/></button></div>))}</div>}
-                    </div>
-
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase tracking-wider border-b border-slate-700 pb-2 flex justify-between items-center">
-                            <span>Fotos</span>
-                            <span className={`text-xs px-2 py-1 rounded ${formData.photos.length >= MAX_PHOTOS ? 'bg-red-900 text-red-200' : 'bg-slate-700 text-slate-300'}`}>{formData.photos.length}/{MAX_PHOTOS}</span>
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            {formData.photos.map(photo => (
-                                <div key={photo.id} className="relative group bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-                                    <img src={photo.url} className="w-full h-32 object-cover" />
-                                    <button onClick={() => removePhoto(photo.id)} className="absolute top-1 right-1 bg-black/60 p-1 rounded-full text-white"><Icons.Trash size={14}/></button>
-                                    <input type="text" placeholder="Legenda..." className="w-full bg-slate-900 text-[10px] p-2 text-slate-300 outline-none border-t border-slate-700" value={photo.caption} onChange={e => updateCaption(photo.id, e.target.value)} />
-                                </div>
-                            ))}
-                            <label className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${formData.photos.length >= MAX_PHOTOS ? 'border-slate-700 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:bg-slate-800 hover:border-orange-500 text-slate-500 hover:text-orange-500'}`}>
-                                <Icons.Plus size={24} /><span className="text-xs mt-2 font-bold">Add Foto</span>
-                                <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={formData.photos.length >= MAX_PHOTOS}/>
-                            </label>
-                        </div>
-                    </div>
-
-                    {/* BARRA DE AÇÃO FIXA / LÓGICA DE ASSINATURA */}
-                    <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900/95 backdrop-blur border-t border-slate-700 z-40">
-                        <div className="max-w-2xl mx-auto">
+            
+            {/* CABEÇALHO DO FORMULÁRIO/PREVIEW */}
             {(rawView === 'form' || rawView === 'preview') && (
                 <div className="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
                     <div className="max-w-2xl mx-auto p-3 flex justify-between items-center">
-                        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><Icons.Home size={18} /><span className="text-xs font-bold uppercase hidden sm:inline">Início</span></button>
+                        <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"><window.Icons.Home size={18} /><span className="text-xs font-bold uppercase hidden sm:inline">Início</span></button>
                         <div className="flex items-center gap-2"><div className="bg-orange-600 w-6 h-6 rounded flex items-center justify-center font-black text-white text-[10px]">RB</div><span className="font-bold text-sm text-white uppercase tracking-wider">{rawView === 'preview' ? 'Finalizado' : 'Edição'}</span></div>
                         <div className="flex gap-2">
-                            {rawView === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving || isUploading} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"><Icons.Save size={18}/></button>}
+                            {rawView === 'form' && <button onClick={() => saveToCloud()} disabled={isSaving || isUploading} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"><window.Icons.Save size={18}/></button>}
                             {rawView === 'preview' && <button onClick={() => setView('form')} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold text-slate-200">Editar</button>}
                         </div>
                     </div>
                 </div>
             )}
             
-            {/* FORMULÁRIO E ASSINATURAS */}
+            {/* RENDERIZAÇÃO DIRETA DA TELA DE FORMULÁRIO E ASSINATURA */}
             {rawView === 'form' && <SafeComponent name="ReportFormView" props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName && formData.executionPeriods?.length > 0), showConfirm: showCustomDialog }} />}
             {rawView === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {rawView === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
@@ -628,143 +461,59 @@ function App() {
             
             {/* --- MODAIS DE SOBREPOSIÇÃO (Agendamento) --- */}
             {showScheduleModal && (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
-                        <h3 className="text-lg font-bold text-white mb-4">{scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>
+                <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl">
+                        <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-white flex items-center gap-2">{scheduleData.id ? <window.Icons.Pen size={18}/> : <window.Icons.Plus size={18}/>} {scheduleData.id ? 'Editar Agendamento' : 'Novo Agendamento'}</h3>{scheduleData.batchId && <span className="bg-purple-500/20 text-purple-400 text-[10px] px-2 py-0.5 rounded font-bold border border-purple-500/30 flex items-center gap-1"><window.Icons.Layers size={12}/> Lote</span>}</div>
                         <div className="space-y-3">
-                            <input type="date" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} />
-                            <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
-                            <input type="text" placeholder="Descrição" className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div><label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Inicial</label><input type="date" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm" value={scheduleData.date} onChange={e => setScheduleData({...scheduleData, date: e.target.value})} /></div>
+                                <div><label className="text-[10px] text-slate-400 font-bold uppercase ml-1">Data Final</label><input type="date" className={`w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-white text-sm ${scheduleData.id ? 'opacity-50 cursor-not-allowed' : ''}`} value={scheduleData.endDate} onChange={e => setScheduleData({...scheduleData, endDate: e.target.value})} disabled={!!scheduleData.id} title={scheduleData.id ? "Apenas em novos agendamentos" : "Opcional. Preencha para criar múltiplos dias."} /></div>
+                            </div>
+                            <input type="text" placeholder="Embarcação" className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white uppercase" value={scheduleData.vesselName} onChange={e => setScheduleData({...scheduleData, vesselName: e.target.value})} />
+                            <input type="text" placeholder="Descrição Rápida..." className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white" value={scheduleData.description} onChange={e => setScheduleData({...scheduleData, description: e.target.value})} />
                         </div>
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={() => setShowScheduleModal(false)} className="flex-1 py-2 text-slate-400">Cancelar</button>
-                            <button onClick={saveSchedule} className="flex-1 py-2 bg-orange-600 text-white rounded font-bold">
-                                {scheduleData.id ? 'Atualizar' : 'Agendar'}
-                            </button>
-                        </div>
+                        <div className="flex gap-3 mt-6"><button onClick={() => setShowScheduleModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:bg-slate-700 rounded-lg transition-colors">Cancelar</button><button onClick={saveSchedule} className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-lg font-bold shadow-lg shadow-orange-900/20">{scheduleData.id ? 'Atualizar Dia' : 'Agendar'}</button></div>
                     </div>
                 </div>
             )}
-
-            {/* MODAL DETALHES DO DIA (LISTA DE EVENTOS PARA EDITAR/EXCLUIR) */}
+            
+            {/* MODAL: DETALHES DOS EVENTOS DE UM DIA */}
             {selectedDateEvents && (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-800 rounded-xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
-                        <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-white capitalize">{new Date(selectedDateEvents.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
-                            <button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><Icons.ArrowLeft className="rotate-180"/></button>
-                        </div>
+                <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-800 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden shadow-2xl">
+                        <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center"><h3 className="text-lg font-bold text-white capitalize">{formatDate(selectedDateEvents.date)}</h3><button onClick={() => setSelectedDateEvents(null)} className="text-slate-400 hover:text-white"><window.Icons.ArrowLeft className="rotate-180"/></button></div>
                         <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
                             {selectedDateEvents.events.length === 0 && <p className="text-slate-500 text-center py-4">Nenhum evento.</p>}
                             {selectedDateEvents.events.map((evt, idx) => (
                                 <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${evt.type === 'report' ? 'bg-green-900/20 border-green-500/30' : 'bg-orange-900/20 border-orange-500/30'}`}>
                                     <div className="overflow-hidden mr-3">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
-                                                {evt.type === 'report' ? 'Realizado' : 'Agendado'}
-                                            </span>
-                                            <span className="text-xs text-slate-400 font-mono">{evt.time}</span>
-                                        </div>
-                                        <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>
-                                        {evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
+                                        <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${evt.type === 'report' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>{evt.type === 'report' ? 'Realizado' : 'Agendado'}</span>{evt.batchId && <span className="text-[10px] font-bold text-purple-400 flex items-center gap-0.5"><window.Icons.Layers size={10}/> Lote</span>}<span className="text-xs text-slate-400 font-mono hidden sm:inline">{evt.time}</span></div>
+                                        <h4 className="font-bold text-white text-sm truncate uppercase">{evt.title}</h4>{evt.description && <p className="text-xs text-slate-400 truncate">{evt.description}</p>}
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
-                                        {evt.type === 'schedule' ? (
-                                            <>
-                                                <button onClick={() => openEditSchedule(evt)} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><Icons.Pen size={16}/></button>
-                                                <button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><Icons.Trash size={16}/></button>
-                                            </>
-                                        ) : (
-                                            <button onClick={() => { setSelectedDateEvents(null); editReport(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><Icons.Eye size={16}/></button>
-                                        )}
-                                    </div>
+                                    <div className="flex gap-2 shrink-0">{evt.type === 'schedule' ? (<><button onClick={() => {openEditSchedule(evt); setSelectedDateEvents(null);}} className="p-2 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"><window.Icons.Pen size={16}/></button><button onClick={() => deleteSchedule(evt.id)} className="p-2 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><window.Icons.Trash size={16}/></button></>) : (<button onClick={() => { setSelectedDateEvents(null); if(isTechUser) editReport(null, evt.data); else openPreview(null, evt.data); }} className="p-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"><window.Icons.Eye size={16}/></button>)}</div>
                                 </div>
                             ))}
                         </div>
-                        <div className="p-4 border-t border-slate-700 bg-slate-900/50">
-                            <button 
-                                onClick={() => { setScheduleData({date: selectedDateEvents.date, vesselName: '', description: '', id: null}); setShowScheduleModal(true); }} 
-                                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"
-                            >
-                                <Icons.Plus size={16}/> Adicionar Outro Agendamento
-                            </button>
+                        <div className="p-4 border-t border-slate-700 bg-slate-900/50"><button onClick={() => { setScheduleData({date: selectedDateEvents.date, endDate: '', vesselName: '', description: '', id: null, batchId: null}); setShowScheduleModal(true); setSelectedDateEvents(null); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"><window.Icons.Plus size={16}/> Adicionar Outro Agendamento</button></div>
+                    </div>
+                </div>
+            )}
+            
+            {/* O NOVO SISTEMA DE DIÁLOGO TURBINADO */}
+            {dialog.isOpen && (
+                <div className="fixed inset-0 z-[99999] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                    <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden transform transition-all">
+                        <div className={`p-4 border-b flex items-center gap-3 ${dialog.type === 'confirm' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : dialog.type === 'custom' ? 'border-purple-500/30 bg-purple-500/10 text-purple-400' : dialog.title.includes('Erro') || dialog.title.includes('Crítico') ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
+                            {dialog.type === 'custom' ? <window.Icons.Layers size={20}/> : dialog.type === 'confirm' || dialog.title.includes('Erro') ? <window.Icons.Alert size={20}/> : <window.Icons.Check size={20}/>}
+                            <h3 className="text-lg font-bold">{dialog.title}</h3>
+                        </div>
+                        <div className="p-6 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{dialog.message}</div>
+                        <div className={`p-4 border-t border-slate-700 bg-slate-900/50 flex ${dialog.buttons.length > 2 ? 'flex-col gap-2' : 'justify-end gap-3'}`}>
+                            {dialog.buttons.map((btn, i) => <button key={i} onClick={btn.onClick} className={`px-5 py-2.5 rounded-xl font-bold transition-all shadow-md ${btn.style}`}>{btn.label}</button> )}
                         </div>
                     </div>
                 </div>
             )}
-
-            {/* ASSINATURAS */}
-            {view === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
-            {view === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
-
-            {/* PREVIEW FINAL */}
-            {view === 'preview' && (
-                <div className="no-print p-6 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-sm mx-auto space-y-6 fade-in">
-                    <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 mb-2"><Icons.Check size={40} className="text-white"/></div>
-                    <div><h2 className="text-2xl font-bold text-white mb-1">Salvo e Sincronizado!</h2><p className="text-slate-400 text-sm">O relatório já está na nuvem.</p></div>
-                    <div className="w-full space-y-3">
-                        <button onClick={() => window.print()} className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 border-b-4 border-slate-300 active:border-0 active:translate-y-1"><Icons.Save size={20}/> Baixar PDF</button>
-                        <button onClick={shareData} className="w-full bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold py-4 rounded-xl border border-slate-700 flex items-center justify-center gap-3"><Icons.Share size={20} /> Compartilhar Dados</button>
-                    </div>
-                    <div className="flex gap-4 w-full pt-4">
-                        <button onClick={startNewReport} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Novo Relatório</button>
-                        <button onClick={() => setView('dashboard')} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-lg">Ir ao Início</button>
-                    </div>
-                </div>
-            )}
-
-            {/* LAYOUT DE IMPRESSÃO (PDF) */}
-            <div className="print-only print-container bg-white text-slate-900 relative">
-                <div className="flex justify-between items-start border-b-4 border-orange-500 pb-2 mb-4">
-                    <div className="flex flex-col"><h1 className="text-5xl font-logo retiblocos-logo uppercase leading-none mt-1">RETIBLOCOS</h1><div className="retiblocos-sub text-xs tracking-[0.2em] px-1 py-0.5 mt-1 rounded-sm w-fit uppercase">Retífica de Peças e Motores</div></div>
-                    <div className="text-right">
-                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Nº Controle</div><div className="text-xl font-bold uppercase text-orange-600 leading-tight font-mono">{formData.controlNumber || '0000'}</div>
-                        <div className="mt-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cliente</div><div className="text-sm font-bold uppercase text-slate-800 leading-tight">{formData.branch.split(' - ')[0]}</div>
-                    </div>
-                </div>
-
-                <div className="flex bg-slate-100 rounded border-l-4 border-orange-600 mb-4 p-2 items-center justify-between">
-                    <div><span className="text-[9px] uppercase font-bold text-slate-500 block">Tipo de Serviço</span><span className="font-bold text-slate-900 text-sm">{formData.maintenanceType === 'Outros' ? (formData.maintenanceTypeOther || 'Outros') : formData.maintenanceType}</span></div>
-                    <div className="text-right"><span className="text-[9px] uppercase font-bold text-slate-500 block">Período de Execução</span><div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-800"><span>{formatDate(formData.startDate)} {formData.startTime}</span><span className="text-orange-400">➜</span><span>{formatDate(formData.endDate)} {formData.endTime}</span></div><div className="text-[9px] font-bold text-orange-600 mt-0.5">Duração: {calculateDuration()}</div></div>
-                </div>
-
-                <div className="mb-4 grid grid-cols-4 gap-2 text-[10px]">
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Embarcação</span><span className="block font-bold text-slate-900 uppercase">{formData.vesselName}</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Motor</span><span className="block font-bold text-slate-900 uppercase">{formData.engineModel}</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Posição</span><span className="block font-bold text-slate-900 uppercase">{formData.enginePosition}</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Horímetro</span><span className="block font-bold text-slate-900 font-mono">{formData.runningHours} H</span></div>
-                    <div className="p-2 border border-slate-200 rounded bg-slate-50/50 col-span-4"><span className="block font-bold text-slate-400 uppercase mb-0.5 text-[8px]">Série</span><span className="block font-bold text-slate-900 font-mono uppercase">{formData.engineSerial || 'N/A'}</span></div>
-                </div>
-
-                <div className="space-y-4">
-                    <div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-orange-500 pl-2 py-0.5 mb-1 text-[11px] bg-orange-50">1. Serviços Executados</h3><div className="text-justify text-[11px] leading-snug whitespace-pre-wrap text-slate-800 pl-3">{formData.tasksExecuted}</div></div>
-                    {formData.notes && (<div><h3 className="font-bold text-slate-900 uppercase border-l-4 border-blue-400 pl-2 py-0.5 mb-1 text-[11px] bg-blue-50">2. Observações</h3><p className="text-justify text-[11px] leading-snug whitespace-pre-wrap italic text-slate-600 pl-3">{formData.notes}</p></div>)}
-                </div>
-
-                {formData.parts.length > 0 && (
-                    <div className="mt-4 break-inside-avoid">
-                        <h3 className="font-bold text-slate-900 uppercase border-b border-slate-200 pb-1 mb-2 text-[10px]">Relação de Peças e Materiais</h3>
-                        <table className="w-full text-[10px] border border-slate-200 rounded overflow-hidden"><thead className="bg-slate-800 text-white"><tr><th className="p-1 w-10 text-center">QTD</th><th className="p-1 text-left">DESCRIÇÃO</th><th className="p-1 text-right w-24">FONTE</th></tr></thead><tbody>{formData.parts.map((p, i) => (<tr key={i} className={i%2===0?'bg-white':'bg-slate-50'}><td className="p-1 border-b text-center font-bold">{p.qty}</td><td className="p-1 border-b font-bold text-slate-700">{p.name}</td><td className="p-1 border-b text-right"><span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${p.source==='Retiblocos'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{p.source}</span></td></tr>))}</tbody></table>
-                    </div>
-                )}
-
-                {formData.photos.length > 0 && (
-                    <div className="mt-6">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Registro Fotográfico</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                            {formData.photos.map(p => (<div key={p.id} className="break-inside-avoid border border-slate-200 bg-white p-1 rounded shadow-sm"><div className="h-40 flex items-center justify-center overflow-hidden bg-slate-50 rounded mb-1"><img src={p.url} className="max-h-full max-w-full object-contain"/></div>{p.caption && <p className="text-[9px] font-bold text-slate-700 text-center uppercase leading-tight">{p.caption}</p>}</div>))}
-                        </div>
-                    </div>
-                )}
-
-                <div className="mt-8 pt-4 border-t-2 border-slate-800 break-inside-avoid">
-                    <div className="grid grid-cols-2 gap-10">
-                        <div className="text-center">{formData.technicianSignature ? <img src={formData.technicianSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">{formData.technicianName}</p><p className="text-[8px] uppercase font-bold text-orange-600 tracking-wider">Técnico Retiblocos</p></div></div>
-                        <div className="text-center">{formData.clientSignature ? <img src={formData.clientSignature} className="h-10 mx-auto mb-1 object-contain"/> : <div className="h-10"/>}<div className="border-t border-slate-400 pt-1"><p className="font-bold text-[10px] uppercase text-slate-900">Aprovação Cliente</p><p className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Chefe de Máquinas / Cmte</p></div></div>
-                    </div>
-                    <div className="text-[8px] text-slate-300 uppercase text-center mt-6 font-mono">Retiblocos Retífica de Motores - Documento Digital - {new Date().toLocaleDateString()}</div>
-                </div>
-            </div>
         </div>
     );
 }
