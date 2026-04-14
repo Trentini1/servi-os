@@ -360,6 +360,14 @@ function App() {
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('form'); };
     const deleteReport = (e, id) => { if(e) e.stopPropagation(); if(!id) return; showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => { try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); } }); };
 
+    const toggleBilledStatus = async (e, id, currentStatus) => {
+        if(e) e.stopPropagation();
+        try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).update({ isBilled: !currentStatus }); } 
+        catch (err) { showAlert("Erro", "Falha ao atualizar status de conclusão."); }
+    };
+
+    const printDirect = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('preview'); setTimeout(() => window.print(), 800); };
+
     const saveToCloud = async (dataToSave = null, silent = false) => {
         if (!user) return showAlert("Aviso", "Conectando ao servidor...");
         if (!silent) setIsSaving(true);
@@ -413,7 +421,7 @@ function App() {
             {/* ROTEADOR MODULAR DE TELAS */}
             {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
-            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser: currentUserData }} />}
+            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser: currentUserData }} />}
             {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules, reports }} />}
             
             {/* CALENDÁRIO */}

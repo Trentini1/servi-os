@@ -3,7 +3,7 @@
 const { useState } = React;
 
 window.DashboardView = ({ 
-    reports, startNewReport, editReport, deleteReport, openPreview, formatDate, setView, currentUser 
+    reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser 
 }) => {
     const Icons = window.Icons;
     const [searchTerm, setSearchTerm] = useState('');
@@ -134,7 +134,7 @@ window.DashboardView = ({
                                 <div className="p-4 pt-5">
                                     <div className="flex justify-between items-start mb-3">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                                 <span className="text-[10px] bg-slate-900 text-orange-500 font-mono font-bold px-2 py-0.5 rounded border border-orange-500/20 tracking-wider">
                                                     OS: {rep.controlNumber || 'S/N'}
                                                 </span>
@@ -142,6 +142,12 @@ window.DashboardView = ({
                                                     <span className="text-[10px] text-green-400 font-bold uppercase flex items-center gap-1"><Icons.Check size={10}/> Finalizado</span>
                                                 ) : (
                                                     <span className="text-[10px] text-red-400 font-bold uppercase flex items-center gap-1 animate-pulse"><Icons.Alert size={10}/> Pendente</span>
+                                            )}
+                                            
+                                            {isMaster && rep.isBilled && (
+                                                <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                                                    <Icons.Money size={10}/> Faturado
+                                                </span>
                                                 )}
                                             </div>
 
@@ -188,15 +194,20 @@ window.DashboardView = ({
 
                                     <div className="flex gap-2">
                                         {isSigned && (
-                                            <button onClick={(e) => openPreview(e, rep)} className="flex-1 py-2 bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-purple-500/20 hover:border-purple-600">
-                                                <Icons.Printer size={14}/> <span>Gerar PDF</span>
-                                            </button>
+                                            <>
+                                                <button onClick={(e) => printDirect(e, rep)} className="flex-1 py-2 bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-purple-500/20 hover:border-purple-600" title="Exportar Direto para PDF">
+                                                    <Icons.Printer size={14}/> <span className="hidden sm:inline">PDF Rápido</span><span className="sm:hidden">PDF</span>
+                                                </button>
+                                                <button onClick={(e) => openPreview(e, rep)} className="flex-1 py-2 bg-slate-700/50 text-slate-300 hover:bg-slate-600 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-slate-600">
+                                                    <Icons.Eye size={14}/> <span className="hidden sm:inline">Visualizar</span><span className="sm:hidden">Ver</span>
+                                                </button>
+                                            </>
                                         )}
                                         
                                         {isTech && (
                                             <>
                                                 <button onClick={(e) => editReport(e, rep)} className="flex-1 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-blue-500/20 hover:border-blue-600">
-                                                    <Icons.Pen size={14}/> <span>{isSigned ? 'Visualizar' : 'Continuar'}</span>
+                                                    <Icons.Pen size={14}/> <span>{isSigned ? 'Editar' : 'Continuar'}</span>
                                                 </button>
                                                 
                                                 <button onClick={(e) => deleteReport(e, rep.id)} className="w-12 bg-red-600/10 text-red-400 hover:bg-red-600 hover:text-white rounded-xl flex items-center justify-center transition-colors border border-red-500/20 hover:border-red-600" title="Excluir Relatório">
@@ -205,6 +216,14 @@ window.DashboardView = ({
                                             </>
                                         )}
                                     </div>
+
+                                {isMaster && (
+                                    <div className="mt-2 pt-2 border-t border-slate-700/50 flex gap-2">
+                                        <button onClick={(e) => toggleBilledStatus(e, rep.id, rep.isBilled)} className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border ${rep.isBilled ? 'bg-green-600/10 text-green-400 border-green-500/20 hover:bg-green-600 hover:text-white' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}`}>
+                                            <Icons.Money size={14}/> <span>{rep.isBilled ? 'Faturado / Concluído' : 'Marcar como Faturado'}</span>
+                                        </button>
+                                    </div>
+                                )}
                                 </div>
                             </div>
                         );
