@@ -3,36 +3,69 @@
 const { useState } = React;
 
 window.DashboardView = ({
-    reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser, showConfirm
+    reports, startNewReport, editReport, deleteReport, openPreview, printDirect,
+    updateBillingStatus, updateBillingNote, formatDate, setView, currentUser, showConfirm
 }) => {
     const Icons = window.Icons;
+    const { BILLING_STAGES } = window.AppConstants;
     const [searchTerm, setSearchTerm] = useState('');
+    const [billingFilter, setBillingFilter] = useState('all');
 
-    const filteredReports = reports.filter(r =>
-        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Permissões Baseadas no Papel (RBAC)
     const isMaster = currentUser?.role === 'master';
     const isTech = currentUser?.role === 'tech' || isMaster;
+
+    const getBillingStatus = (rep) => rep.billingStatus || (rep.isBilled ? 'billed' : 'pending');
+
+    const getStageButtonStyle = (stageId, isActive, isPast) => {
+        const activeStyles = {
+            pending: 'bg-slate-600 text-white border-slate-400',
+            quoting: 'bg-amber-500/25 text-amber-300 border-amber-500',
+            sent:    'bg-blue-500/25 text-blue-300 border-blue-500',
+            billed:  'bg-green-500/25 text-green-300 border-green-500',
+        };
+        if (isActive) return activeStyles[stageId];
+        if (isPast)   return 'bg-slate-700/40 text-slate-500 border-slate-600';
+        return 'bg-slate-800 text-slate-600 border-slate-700 hover:bg-slate-700 hover:text-slate-400';
+    };
+
+    const getStageBadgeStyle = (stageId) => {
+        const styles = {
+            pending: 'bg-slate-700/50 text-slate-300 border-slate-600/30',
+            quoting: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+            sent:    'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            billed:  'bg-green-500/20 text-green-400 border-green-500/30',
+        };
+        return styles[stageId] || styles.pending;
+    };
+
+    const billingCounts = isMaster
+        ? BILLING_STAGES.reduce((acc, s) => { acc[s.id] = reports.filter(r => getBillingStatus(r) === s.id).length; return acc; }, {})
+        : {};
 
     const handleLogout = () => {
         showConfirm("Sair do Sistema", "Deseja realmente sair do sistema?", () => window.auth.signOut());
     };
 
+    const filteredReports = reports.filter(r => {
+        const matchSearch = (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const matchBilling = !isMaster || billingFilter === 'all' || getBillingStatus(r) === billingFilter;
+        return matchSearch && matchBilling;
+    });
+
     return (
         <div className="no-print max-w-3xl mx-auto p-4 space-y-6 fade-in pb-20">
-            {/* CABEÇALHO DE USUÁRIO LOGADO */}
+
+            {/* CABEÇALHO */}
             <div className="flex justify-between items-center py-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
                     <div className="bg-orange-600 w-12 h-12 rounded-xl flex items-center justify-center font-black text-white text-xl shadow-lg shadow-orange-900/50">RB</div>
                     <div>
                         <h1 className="text-xl font-black text-white tracking-tight leading-none">Olá, {currentUser?.name || 'Usuário'}</h1>
                         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mt-1 inline-block
-                            ${isMaster ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 
-                              isTech ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 
-                              'bg-slate-500/20 text-slate-400 border border-slate-500/30'}`}
+                            ${isMaster ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                              isTech   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                         'bg-slate-500/20 text-slate-400 border border-slate-500/30'}`}
                         >
                             Acesso: {isMaster ? 'Master' : isTech ? 'Técnico' : 'Cliente SAAM'}
                         </span>
@@ -42,8 +75,8 @@ window.DashboardView = ({
                     <Icons.ArrowLeft size={18} className="rotate-180" />
                 </button>
             </div>
-            
-            {/* SÓ MOSTRA O BOTÃO DE CRIAR RELATÓRIO SE FOR TÉCNICO OU MASTER */}
+
+            {/* BOTÃO CRIAR RELATÓRIO (técnico/master) */}
             {isTech && (
                 <button onClick={startNewReport} className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white p-6 rounded-2xl shadow-xl shadow-orange-900/20 flex items-center justify-between group transition-all transform hover:-translate-y-1">
                     <div className="flex items-center gap-4">
@@ -66,7 +99,7 @@ window.DashboardView = ({
                         <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Serviços programados</p>
                     </div>
                 </button>
-                
+
                 <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-lg flex flex-col justify-between h-full">
                     <div className="bg-green-500/10 p-2.5 rounded-xl w-fit mb-2 text-green-400"><Icons.Check size={20}/></div>
                     <div>
@@ -87,21 +120,54 @@ window.DashboardView = ({
                 )}
             </div>
 
-            {/* HISTÓRICO / PESQUISA */}
-            <div className="space-y-4 pt-4">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
-                    <div>
-                        <h3 className="text-slate-300 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
-                            <Icons.Box size={14}/> Histórico de Laudos
-                        </h3>
+            {/* ====================================================== */}
+            {/* PAINEL DE PIPELINE DE COBRANÇA (master only)            */}
+            {/* ====================================================== */}
+            {isMaster && (
+                <div className="bg-slate-800 border border-purple-500/20 rounded-2xl p-4 shadow-lg">
+                    <h3 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Icons.Money size={14}/> Pipeline de Cobrança SAAM
+                    </h3>
+                    <div className="grid grid-cols-4 gap-2">
+                        {BILLING_STAGES.map(stage => {
+                            const count = billingCounts[stage.id] || 0;
+                            const isFiltered = billingFilter === stage.id;
+                            return (
+                                <button
+                                    key={stage.id}
+                                    onClick={() => setBillingFilter(isFiltered ? 'all' : stage.id)}
+                                    className={`p-3 rounded-xl border text-center transition-all ${isFiltered ? getStageBadgeStyle(stage.id) + ' ring-1 ring-inset' : 'bg-slate-900/60 border-slate-700 hover:bg-slate-700/50'}`}
+                                >
+                                    <p className="text-2xl font-black leading-none mb-1 text-white">{count}</p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 leading-tight">{stage.label}</p>
+                                </button>
+                            );
+                        })}
                     </div>
+                    {billingFilter !== 'all' && (
+                        <button onClick={() => setBillingFilter('all')} className="mt-3 w-full text-xs text-slate-500 hover:text-slate-300 font-bold flex items-center justify-center gap-1 transition-colors">
+                            <Icons.Refresh size={12}/> Limpar filtro — ver todos
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* HISTÓRICO / PESQUISA */}
+            <div className="space-y-4 pt-2">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
+                    <h3 className="text-slate-300 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
+                        <Icons.Box size={14}/>
+                        {isMaster && billingFilter !== 'all'
+                            ? `${BILLING_STAGES.find(s => s.id === billingFilter)?.label} (${filteredReports.length})`
+                            : 'Histórico de Laudos'}
+                    </h3>
                     <div className="relative w-full sm:w-64">
                         <Icons.Search className="absolute left-3 top-3 text-slate-500" size={16}/>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar barco ou OS..." 
-                            className="bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:border-orange-500 outline-none w-full shadow-inner placeholder:text-slate-600 transition-colors" 
-                            value={searchTerm} 
+                        <input
+                            type="text"
+                            placeholder="Buscar barco ou OS..."
+                            className="bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:border-orange-500 outline-none w-full shadow-inner placeholder:text-slate-600 transition-colors"
+                            value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
@@ -116,13 +182,12 @@ window.DashboardView = ({
 
                     {filteredReports.map(rep => {
                         const isSigned = !!rep.technicianSignature;
-                        
-                        // LÓGICA RETROCOMPATÍVEL PARA PEGAR A DATA PRINCIPAL
-                        const mainDateStr = (rep.executionPeriods && rep.executionPeriods.length > 0) 
-                            ? rep.executionPeriods[0].date 
-                            : rep.startDate;
+                        const repStatus = getBillingStatus(rep);
+                        const currentStageIdx = BILLING_STAGES.findIndex(s => s.id === repStatus);
 
-                        // Verifica se tem múltiplos dias
+                        const mainDateStr = (rep.executionPeriods && rep.executionPeriods.length > 0)
+                            ? rep.executionPeriods[0].date
+                            : rep.startDate;
                         const isMultiDay = rep.executionPeriods && rep.executionPeriods.length > 1;
 
                         return (
@@ -130,9 +195,10 @@ window.DashboardView = ({
                                 <div className={`h-1.5 w-full absolute top-0 left-0 ${isSigned ? 'bg-green-500' : 'bg-orange-500'}`}></div>
 
                                 <div className="p-4 pt-5">
+                                    {/* CABEÇALHO DO CARD */}
                                     <div className="flex justify-between items-start mb-3">
                                         <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                                 <span className="text-[10px] bg-slate-900 text-orange-500 font-mono font-bold px-2 py-0.5 rounded border border-orange-500/20 tracking-wider">
                                                     OS: {rep.controlNumber || 'S/N'}
                                                 </span>
@@ -140,12 +206,11 @@ window.DashboardView = ({
                                                     <span className="text-[10px] text-green-400 font-bold uppercase flex items-center gap-1"><Icons.Check size={10}/> Finalizado</span>
                                                 ) : (
                                                     <span className="text-[10px] text-red-400 font-bold uppercase flex items-center gap-1 animate-pulse"><Icons.Alert size={10}/> Pendente</span>
-                                            )}
-                                            
-                                            {isMaster && rep.isBilled && (
-                                                <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1">
-                                                    <Icons.Money size={10}/> Faturado
-                                                </span>
+                                                )}
+                                                {isMaster && repStatus !== 'pending' && (
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1 border ${getStageBadgeStyle(repStatus)}`}>
+                                                        <Icons.Money size={10}/> {BILLING_STAGES.find(s => s.id === repStatus)?.label}
+                                                    </span>
                                                 )}
                                             </div>
 
@@ -154,9 +219,9 @@ window.DashboardView = ({
                                                     {rep.vesselName || 'SEM NOME'}
                                                 </h4>
                                                 {rep.enginePosition && (
-                                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border 
-                                                        ${rep.enginePosition.toUpperCase() === 'BOMBORDO' || rep.enginePosition.toUpperCase() === 'BB' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 
-                                                        rep.enginePosition.toUpperCase() === 'BORESTE' || rep.enginePosition.toUpperCase() === 'BE' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 
+                                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border
+                                                        ${rep.enginePosition.toUpperCase() === 'BOMBORDO' || rep.enginePosition.toUpperCase() === 'BB' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                                                        rep.enginePosition.toUpperCase() === 'BORESTE'  || rep.enginePosition.toUpperCase() === 'BE' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
                                                         'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}
                                                     >
                                                         {rep.enginePosition}
@@ -165,7 +230,8 @@ window.DashboardView = ({
                                             </div>
                                         </div>
                                     </div>
-                                    
+
+                                    {/* INFO DO MOTOR / DATA */}
                                     <div className="bg-slate-900/60 rounded-xl p-3 grid grid-cols-2 gap-2 border border-slate-700/50 mb-4">
                                         <div className="flex items-center gap-2 text-xs text-slate-300">
                                             <div className="text-slate-500"><Icons.Box size={14}/></div>
@@ -183,13 +249,14 @@ window.DashboardView = ({
                                             <span className="truncate">{rep.maintenanceType || 'Serviço não especificado'}</span>
                                         </div>
                                     </div>
-                                    
+
                                     {rep.createdByName && (
                                         <div className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-3 px-1 text-right">
                                             Autor: {rep.createdByName}
                                         </div>
                                     )}
 
+                                    {/* AÇÕES */}
                                     <div className="flex gap-2">
                                         {isSigned && (
                                             <>
@@ -201,13 +268,11 @@ window.DashboardView = ({
                                                 </button>
                                             </>
                                         )}
-                                        
                                         {isTech && (
                                             <>
                                                 <button onClick={(e) => editReport(e, rep)} className="flex-1 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-blue-500/20 hover:border-blue-600">
                                                     <Icons.Pen size={14}/> <span>{isSigned ? 'Editar' : 'Continuar'}</span>
                                                 </button>
-                                                
                                                 <button onClick={(e) => deleteReport(e, rep.id)} className="w-12 bg-red-600/10 text-red-400 hover:bg-red-600 hover:text-white rounded-xl flex items-center justify-center transition-colors border border-red-500/20 hover:border-red-600" title="Excluir Relatório">
                                                     <Icons.Trash size={16}/>
                                                 </button>
@@ -215,13 +280,34 @@ window.DashboardView = ({
                                         )}
                                     </div>
 
-                                {isMaster && (
-                                    <div className="mt-2 pt-2 border-t border-slate-700/50 flex gap-2">
-                                        <button onClick={(e) => toggleBilledStatus(e, rep.id, rep.isBilled)} className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors border ${rep.isBilled ? 'bg-green-600/10 text-green-400 border-green-500/20 hover:bg-green-600 hover:text-white' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}`}>
-                                            <Icons.Money size={14}/> <span>{rep.isBilled ? 'Faturado / Concluído' : 'Marcar como Faturado'}</span>
-                                        </button>
-                                    </div>
-                                )}
+                                    {/* ====================================================== */}
+                                    {/* PIPELINE DE COBRANÇA NO CARD (master only)            */}
+                                    {/* ====================================================== */}
+                                    {isMaster && (
+                                        <div className="mt-3 pt-3 border-t border-slate-700/50" onClick={e => e.stopPropagation()}>
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Etapa de Cobrança</p>
+                                            <div className="flex gap-1 mb-2">
+                                                {BILLING_STAGES.map((stage, idx) => (
+                                                    <button
+                                                        key={stage.id}
+                                                        onClick={(e) => { e.stopPropagation(); updateBillingStatus(e, rep.id, stage.id); }}
+                                                        className={`flex-1 py-1.5 rounded text-[9px] font-bold border transition-all ${getStageButtonStyle(stage.id, stage.id === repStatus, idx < currentStageIdx)}`}
+                                                    >
+                                                        {stage.short}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <input
+                                                key={rep.id + '_' + (rep.billingNote || '')}
+                                                type="text"
+                                                placeholder="Nota interna (NF, valor, data de envio...)"
+                                                className="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-slate-300 placeholder:text-slate-600 outline-none focus:border-purple-500/50 transition-colors"
+                                                defaultValue={rep.billingNote || ''}
+                                                onBlur={(e) => updateBillingNote(rep.id, e.target.value)}
+                                                onClick={e => e.stopPropagation()}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

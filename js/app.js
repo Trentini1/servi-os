@@ -63,7 +63,13 @@ window.AppConstants = {
     MAINTENANCE_TYPES: [ "Preventiva", "Corretiva", "Revisão 1.000h", "Revisão 2.000h", "Top Overhaul", "Major Overhaul", "Inspeção", "Outros" ],
     ENGINE_POSITIONS: [ { id: 'bb', label: 'Bombordo', short: 'BB' }, { id: 'be', label: 'Boreste', short: 'BE' }, { id: 'vante', label: 'Vante', short: 'Vante' }, { id: 're', label: 'Ré', short: 'Ré' } ],
     PART_SOURCES: ["Retiblocos", "Cliente"],
-    MAX_PHOTOS: 12
+    MAX_PHOTOS: 12,
+    BILLING_STAGES: [
+        { id: 'pending',  label: 'Pendente',        short: 'Pend.' },
+        { id: 'quoting',  label: 'Em Orçamento',    short: 'Orç.'  },
+        { id: 'sent',     label: 'Enviado p/ SAAM', short: 'Env.'  },
+        { id: 'billed',   label: 'Faturado',        short: 'Fat.'  },
+    ]
 };
 
 const dataURLtoBlob = (dataurl) => {
@@ -362,10 +368,20 @@ function App() {
     const editReport = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('form'); };
     const deleteReport = (e, id) => { if(e) e.stopPropagation(); if(!id) return; showConfirm("Excluir Relatório", "Tem certeza que deseja apagar este relatório permanentemente?", async () => { try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).delete(); } catch (err) { showAlert("Erro", "Erro ao excluir o relatório."); } }); };
 
-    const toggleBilledStatus = async (e, id, currentStatus) => {
+    const updateBillingStatus = async (e, id, newStatus) => {
         if(e) e.stopPropagation();
-        try { await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).update({ isBilled: !currentStatus }); } 
-        catch (err) { showAlert("Erro", "Falha ao atualizar status de conclusão."); }
+        try {
+            await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).update({
+                billingStatus: newStatus,
+                isBilled: newStatus === 'billed'
+            });
+        } catch (err) { showAlert("Erro", "Falha ao atualizar status de cobrança."); }
+    };
+
+    const updateBillingNote = async (id, note) => {
+        try {
+            await window.db.collection('artifacts').doc(appId).collection('public_reports').doc(id).update({ billingNote: note });
+        } catch (err) { console.error("Nota não salva:", err); }
     };
 
     const printDirect = (e, report) => { if(e) e.stopPropagation(); setFormData(applyRetrocompatibility(report)); setView('preview'); setTimeout(() => window.print(), 800); };
@@ -423,7 +439,7 @@ function App() {
             {/* ROTEADOR MODULAR DE TELAS */}
             {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
-            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser: currentUserData, showConfirm }} />}
+            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, printDirect, updateBillingStatus, updateBillingNote, formatDate, setView, currentUser: currentUserData, showConfirm }} />}
             {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules, reports }} />}
             
             {/* CALENDÁRIO */}
