@@ -248,7 +248,7 @@ window.CalendarView = ({ reports, schedules, onDateClick, onAddSchedule }) => {
                                 {/* Data em Quadrado */}
                                 <div className="bg-slate-900 rounded-lg p-2 flex flex-col items-center justify-center w-14 shrink-0 border border-slate-700 group-hover:border-slate-500 transition-colors">
                                     <span className="text-[10px] text-slate-400 uppercase font-bold leading-none mb-1">
-                                        {new Date(ev.date).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}
+                                        {new Date(ev.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}
                                     </span>
                                     <span className="text-lg font-black text-white leading-none">
                                         {ev.date.split('-')[2]}

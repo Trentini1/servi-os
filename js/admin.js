@@ -382,7 +382,7 @@ window.AdminView = ({ setView, showAlert, showConfirm, purgeOldSchedules, report
                                         <tbody className="divide-y divide-slate-200">
                                             {specificTechData.reportsList.map((rep) => (
                                                 <tr key={rep.id} className="hover:bg-slate-50 text-xs">
-                                                    <td className="py-3 px-3 text-slate-600 font-mono">{new Date(rep.date).toLocaleDateString('pt-BR').slice(0, 5)}</td>
+                                                    <td className="py-3 px-3 text-slate-600 font-mono">{rep.date.slice(8, 10)}/{rep.date.slice(5, 7)}</td>
                                                     <td className="py-3 px-3 font-bold text-orange-600 font-mono">{rep.controlNumber}</td>
                                                     <td className="py-3 px-3 font-bold text-slate-800 uppercase">{rep.vesselName}</td>
                                                     <td className="py-3 px-3 text-slate-600 hidden sm:table-cell truncate max-w-[200px]">{rep.maintenanceType}</td>

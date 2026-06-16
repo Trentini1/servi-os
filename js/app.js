@@ -96,8 +96,9 @@ const IntroAnimation = ({ onFinish }) => {
 
 const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
     const canvasRef = useRef(null);
+    const isDrawing = useRef(false);
     useEffect(() => {
-        window.scrollTo(0, 0); document.body.style.overflow = 'hidden'; 
+        window.scrollTo(0, 0); document.body.style.overflow = 'hidden';
         const timer = setTimeout(() => {
             const canvas = canvasRef.current; if (!canvas) return;
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
@@ -109,8 +110,9 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
         return () => { document.body.style.overflow = 'auto'; clearTimeout(timer); };
     }, []);
     const getPos = (e) => { const r = canvasRef.current.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top }; };
-    const start = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); };
-    const move = (e) => { if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); };
+    const start = (e) => { if(e.cancelable) e.preventDefault(); isDrawing.current = true; const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); };
+    const move = (e) => { if(!isDrawing.current) return; if(e.cancelable) e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x, y); ctx.stroke(); };
+    const stop = () => { isDrawing.current = false; };
     return (
         <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-4">
             <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col h-[70vh]">
@@ -119,7 +121,7 @@ const SignaturePad = ({ title, onSave, onCancel, onSkip }) => {
                     <button onClick={() => {const c=canvasRef.current;c.getContext('2d').clearRect(0,0,c.width,c.height);c.getContext('2d').beginPath();}} className="text-slate-500 hover:text-red-500 p-2"><window.Icons.Refresh /></button>
                 </div>
                 <div className="flex-1 bg-white relative w-full overflow-hidden cursor-crosshair touch-none">
-                    <canvas ref={canvasRef} className="w-full h-full block touch-none" onMouseDown={start} onMouseMove={move} onTouchStart={start} onTouchMove={move} />
+                    <canvas ref={canvasRef} className="w-full h-full block touch-none" onMouseDown={start} onMouseMove={move} onMouseUp={stop} onMouseLeave={stop} onTouchStart={start} onTouchMove={move} onTouchEnd={stop} />
                     <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none text-slate-200 text-3xl font-black opacity-20 uppercase select-none">Assine Aqui</div>
                 </div>
                 <div className="bg-slate-50 p-4 border-t flex gap-3 shrink-0">
@@ -224,7 +226,7 @@ function App() {
                 if (u.isAnonymous) return await window.auth.signOut();
                 const doc = await window.db.collection('users').doc(u.uid).get();
                 if (doc.exists) {
-                    const userData = doc.data(); setCurrentUserData(userData); initialFormState.technicianName = userData.name || '';
+                    const userData = doc.data(); setCurrentUserData(userData);
                 } else setCurrentUserData({ name: u.email, role: 'client' }); 
                 
                 const targetView = !localStorage.getItem('hasSeenIntro') ? 'intro' : 'dashboard';
@@ -421,7 +423,7 @@ function App() {
             {/* ROTEADOR MODULAR DE TELAS */}
             {rawView === 'intro' && <IntroAnimation onFinish={finishIntro} />}
             {rawView === 'auth' && <SafeComponent name="AuthView" props={{}} />}
-            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser: currentUserData }} />}
+            {rawView === 'dashboard' && <SafeComponent name="DashboardView" props={{ reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser: currentUserData, showConfirm }} />}
             {rawView === 'admin' && <SafeComponent name="AdminView" props={{ setView, showAlert, showConfirm, purgeOldSchedules, reports }} />}
             
             {/* CALENDÁRIO */}
@@ -457,7 +459,7 @@ function App() {
             )}
             
             {/* RENDERIZAÇÃO DIRETA DA TELA DE FORMULÁRIO E ASSINATURA */}
-            {rawView === 'form' && <SafeComponent name="ReportFormView" props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName && formData.executionPeriods?.length > 0), showConfirm: showCustomDialog }} />}
+            {rawView === 'form' && <SafeComponent name="ReportFormView" props={{ formData, setFormData, handlePhotoUpload, isUploading, setView, isFormValid: (formData.vesselName && formData.technicianName && formData.executionPeriods?.length > 0), showConfirm }} />}
             {rawView === 'sig_tech' && <SignaturePad title="Assinatura do Técnico" onSave={saveTechSig} onCancel={() => setView('form')} />}
             {rawView === 'sig_client' && <SignaturePad title="Assinatura Cliente" onSave={saveClientSig} onSkip={skipClientSig} onCancel={() => setView('sig_tech')} />}
             

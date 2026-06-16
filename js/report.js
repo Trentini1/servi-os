@@ -150,7 +150,7 @@ window.ReportFormView = ({
                     {formData.technicianSignature ? (
                         <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-green-500">
                             <div className="flex items-center gap-3"><div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white"><Icons.Check/></div><div><p className="text-green-400 font-bold text-sm uppercase">Relatório Assinado</p><p className="text-[10px] text-slate-400">Técnico confirmou.</p></div></div>
-                            <button onClick={() => showConfirm("Remover Assinatura", "Deseja remover a assinatura e desbloquear a edição do relatório?", () => setFormData({...formData, technicianSignature: null}))} className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2">Remover/Corrigir</button>
+                            <button onClick={() => showConfirm("Remover Assinatura", "Deseja remover a assinatura e desbloquear a edição do relatório?", () => setFormData(prev => ({...prev, technicianSignature: null})))} className="text-red-400 hover:text-red-300 text-xs font-bold underline px-2">Remover/Corrigir</button>
                         </div>
                     ) : (
                         <button disabled={!isFormValid || isUploading} onClick={() => setView('sig_tech')} className={`w-full py-4 rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 text-lg transition-all ${isFormValid && !isUploading ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>{isUploading ? <><Icons.Spinner/> Aguarde...</> : <><Icons.Pen size={20} /> Assinar e Finalizar</>}</button>

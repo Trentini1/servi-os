@@ -2,14 +2,14 @@
 
 const { useState } = React;
 
-window.DashboardView = ({ 
-    reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser 
+window.DashboardView = ({
+    reports, startNewReport, editReport, deleteReport, openPreview, printDirect, toggleBilledStatus, formatDate, setView, currentUser, showConfirm
 }) => {
     const Icons = window.Icons;
     const [searchTerm, setSearchTerm] = useState('');
 
-    const filteredReports = reports.filter(r => 
-        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const filteredReports = reports.filter(r =>
+        (r.vesselName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (r.controlNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -18,9 +18,7 @@ window.DashboardView = ({
     const isTech = currentUser?.role === 'tech' || isMaster;
 
     const handleLogout = () => {
-        if(window.confirm("Deseja realmente sair do sistema?")) {
-            window.auth.signOut();
-        }
+        showConfirm("Sair do Sistema", "Deseja realmente sair do sistema?", () => window.auth.signOut());
     };
 
     return (
